@@ -1,0 +1,397 @@
+.uet-admin {
+	--uet-admin-blue: #0071cc;
+	--uet-admin-blue-soft: #eaf5ff;
+	--uet-admin-border: #dcdcde;
+	--uet-admin-ink: #1d2327;
+	--uet-admin-muted: #646970;
+	--uet-admin-navy: #003362;
+	max-width: 1180px;
+}
+
+.uet-admin__hero {
+	align-items: center;
+	background: linear-gradient(135deg, #001d38 0%, #003362 58%, #0071cc 100%);
+	border-radius: 12px;
+	box-shadow: 0 8px 28px rgba(0, 51, 98, .22);
+	color: #fff;
+	display: flex;
+	justify-content: space-between;
+	margin: 20px 0 24px;
+	overflow: hidden;
+	padding: 32px 36px;
+	position: relative;
+}
+
+.uet-admin__hero::after {
+	background: radial-gradient(circle, rgba(255, 255, 255, .2) 0 2px, transparent 3px);
+	background-size: 18px 18px;
+	content: "";
+	height: 180px;
+	opacity: .55;
+	position: absolute;
+	right: -18px;
+	top: -35px;
+	width: 280px;
+}
+
+.uet-admin__hero > * {
+	position: relative;
+	z-index: 1;
+}
+
+.uet-admin__hero h1 {
+	color: inherit;
+	font-size: clamp(24px, 3vw, 34px);
+	line-height: 1.15;
+	margin: 6px 0 10px;
+	padding: 0;
+}
+
+.uet-admin__hero p {
+	color: rgba(255, 255, 255, .84);
+	font-size: 15px;
+	margin: 0;
+	max-width: 650px;
+}
+
+.uet-admin__brand {
+	align-items: center;
+	display: flex;
+	gap: 22px;
+}
+
+.uet-admin__brand-mark {
+	align-items: center;
+	background: #fff;
+	border: 1px solid rgba(255, 255, 255, .7);
+	border-radius: 14px;
+	box-shadow: 0 8px 22px rgba(0, 20, 42, .22);
+	display: flex;
+	flex: 0 0 86px;
+	height: 86px;
+	justify-content: center;
+}
+
+.uet-admin__brand-mark img {
+	display: block;
+	height: auto;
+	max-height: 62px;
+	width: 72px;
+}
+
+.uet-admin__eyebrow {
+	color: #b9e1ff;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: .12em;
+	text-transform: uppercase;
+}
+
+.uet-admin__badges {
+	display: flex;
+	gap: 8px;
+	margin-left: 28px;
+}
+
+.uet-admin__badges span {
+	background: rgba(255, 255, 255, .13);
+	border: 1px solid rgba(255, 255, 255, .28);
+	border-radius: 999px;
+	font-size: 12px;
+	font-weight: 700;
+	padding: 7px 11px;
+	white-space: nowrap;
+}
+
+.uet-admin__layout {
+	display: grid;
+	gap: 24px;
+	grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+}
+
+.uet-admin__main,
+.uet-admin__sidebar {
+	align-content: start;
+	display: grid;
+	gap: 24px;
+}
+
+.uet-card {
+	background: #fff;
+	border: 1px solid var(--uet-admin-border);
+	border-radius: 10px;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+	box-sizing: border-box;
+	padding: 24px;
+}
+
+.uet-card--compact {
+	padding: 22px;
+}
+
+.uet-card h2 {
+	color: var(--uet-admin-ink);
+	font-size: 16px;
+	line-height: 1.4;
+	margin: 0;
+}
+
+.uet-card p {
+	color: var(--uet-admin-muted);
+}
+
+.uet-card__header {
+	margin-bottom: 20px;
+}
+
+.uet-card__header p {
+	margin: 4px 0 0;
+}
+
+.uet-option-grid {
+	display: grid;
+	gap: 10px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.uet-option-grid--formats {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.uet-option {
+	align-items: center;
+	border: 1px solid var(--uet-admin-border);
+	border-radius: 8px;
+	box-sizing: border-box;
+	cursor: pointer;
+	display: flex;
+	gap: 12px;
+	min-height: 54px;
+	padding: 10px 12px;
+}
+
+.uet-option:hover {
+	border-color: #a7aaad;
+}
+
+.uet-option:focus-within {
+	border-color: var(--uet-admin-blue);
+	box-shadow: 0 0 0 1px var(--uet-admin-blue);
+}
+
+.uet-option:has(input:checked) {
+	background: var(--uet-admin-blue-soft);
+	border-color: #69abe0;
+}
+
+.uet-option input {
+	flex: 0 0 auto;
+	margin: 0;
+}
+
+.uet-option span {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+}
+
+.uet-option small,
+.uet-option code {
+	color: var(--uet-admin-muted);
+	font-size: 11px;
+}
+
+.uet-card__note {
+	border-top: 1px solid #f0f0f1;
+	font-size: 12px;
+	margin: 20px 0 0;
+	padding-top: 14px;
+}
+
+.uet-fields {
+	display: grid;
+	gap: 0;
+}
+
+.uet-field {
+	align-items: start;
+	display: grid;
+	gap: 24px;
+	grid-template-columns: minmax(150px, 1fr) minmax(0, 2fr);
+	padding: 4px 0 20px;
+}
+
+.uet-field + .uet-field {
+	border-top: 1px solid #f0f0f1;
+	padding-top: 20px;
+}
+
+.uet-field > label {
+	color: var(--uet-admin-ink);
+	font-weight: 600;
+	padding-top: 7px;
+}
+
+.uet-field .regular-text {
+	box-sizing: border-box;
+	max-width: 100%;
+	width: 100%;
+}
+
+.uet-field .description {
+	margin: 6px 0 0;
+}
+
+.uet-card__footer {
+	align-items: center;
+	border-top: 1px solid #f0f0f1;
+	display: flex;
+	gap: 14px;
+	margin: 0 -24px -24px;
+	padding: 18px 24px;
+}
+
+.uet-card__footer span {
+	color: var(--uet-admin-muted);
+	font-size: 12px;
+}
+
+.uet-steps {
+	display: grid;
+	gap: 16px;
+	list-style: none;
+	margin: 18px 0 0;
+	padding: 0;
+}
+
+.uet-steps li {
+	align-items: center;
+	color: var(--uet-admin-muted);
+	display: grid;
+	gap: 10px;
+	grid-template-columns: 28px 1fr;
+	margin: 0;
+}
+
+.uet-steps span {
+	align-items: center;
+	background: var(--uet-admin-blue-soft);
+	border-radius: 50%;
+	color: var(--uet-admin-blue);
+	display: flex;
+	font-size: 12px;
+	font-weight: 700;
+	height: 28px;
+	justify-content: center;
+}
+
+.uet-code-list {
+	display: grid;
+	gap: 12px;
+	margin-top: 16px;
+}
+
+.uet-code-item {
+	display: grid;
+	gap: 5px;
+}
+
+.uet-code-item > span {
+	color: var(--uet-admin-ink);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+}
+
+.uet-code-item code {
+	background: #f6f7f7;
+	border: 1px solid #e2e4e7;
+	border-radius: 5px;
+	display: block;
+	overflow-wrap: anywhere;
+	padding: 8px 10px;
+}
+
+.uet-admin__quiet {
+	border-top: 1px solid #f0f0f1;
+	font-size: 12px;
+	margin-bottom: 0;
+	padding-top: 14px;
+}
+
+@media (max-width: 960px) {
+	.uet-option-grid--formats {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 782px) {
+	.uet-admin__hero {
+		align-items: flex-start;
+		padding: 26px 24px;
+	}
+
+	.uet-admin__brand {
+		align-items: flex-start;
+		gap: 16px;
+	}
+
+	.uet-admin__brand-mark {
+		border-radius: 10px;
+		flex-basis: 62px;
+		height: 62px;
+	}
+
+	.uet-admin__brand-mark img {
+		max-height: 44px;
+		width: 52px;
+	}
+
+	.uet-admin__badges {
+		margin-left: 16px;
+	}
+
+	.uet-admin__layout {
+		grid-template-columns: 1fr;
+	}
+
+	.uet-field {
+		gap: 8px;
+		grid-template-columns: 1fr;
+	}
+
+	.uet-field > label {
+		padding-top: 0;
+	}
+}
+
+@media (max-width: 480px) {
+	.uet-admin__hero {
+		display: block;
+	}
+
+	.uet-admin__brand-mark {
+		display: none;
+	}
+
+	.uet-admin__badges {
+		margin: 18px 0 0;
+	}
+
+	.uet-option-grid,
+	.uet-option-grid--formats {
+		grid-template-columns: 1fr;
+	}
+
+	.uet-card__footer {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.uet-admin * {
+		scroll-behavior: auto !important;
+	}
+}
