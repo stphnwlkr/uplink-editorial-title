@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Uplink Editorial Title
  * Description:       Adds an optional editorial display title with safe inline formatting and CSS class assignment to the WordPress block editor.
- * Version:           1.2.1
+ * Version:           1.0.0
  * Requires at least: 7.0
  * Requires PHP:      8.3
  * Author:            Uplink.Press
@@ -16,11 +16,21 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 final class Uplink_Editorial_Title {
-	public const VERSION         = '1.2.1';
+	public const VERSION         = '1.0.0';
 	public const META_TITLE      = 'uplink_editorial_title';
 	public const META_CLASS      = 'uplink_editorial_title_class';
 	public const OPTION_SETTINGS = 'uplink_editorial_title_settings';
 	private static string $settings_page_hook = '';
+
+	/**
+	 * Return a cache version that changes when a bundled asset changes.
+	 */
+	private static function asset_version( string $relative_path ): string {
+		$path     = plugin_dir_path( __FILE__ ) . ltrim( $relative_path, '/' );
+		$modified = is_file( $path ) ? filemtime( $path ) : false;
+
+		return false !== $modified ? self::VERSION . '.' . $modified : self::VERSION;
+	}
 
 	/**
 	 * Initialize plugin hooks.
@@ -120,7 +130,7 @@ final class Uplink_Editorial_Title {
 		return array(
 			'post_types'          => array_values( array_intersect( $post_types, is_array( $stored['post_types'] ?? null ) ? $stored['post_types'] : array() ) ),
 			'formats'             => array_values( array_intersect( $formats, is_array( $stored['formats'] ?? null ) ? $stored['formats'] : array() ) ),
-			'default_block_level' => max( 1, min( 6, (int) ( $stored['default_block_level'] ?? 2 ) ) ),
+			'default_block_level' => max( 0, min( 6, (int) ( $stored['default_block_level'] ?? 2 ) ) ),
 			'default_classes'     => self::sanitize_classes( (string) ( $stored['default_classes'] ?? '' ) ),
 		);
 	}
@@ -138,7 +148,7 @@ final class Uplink_Editorial_Title {
 		return array(
 			'post_types'          => array_values( array_intersect( $valid_post_types, $selected_post_types ) ),
 			'formats'             => array_values( array_intersect( $valid_formats, $selected_formats ) ),
-			'default_block_level' => max( 1, min( 6, (int) ( $value['default_block_level'] ?? 2 ) ) ),
+			'default_block_level' => max( 0, min( 6, (int) ( $value['default_block_level'] ?? 2 ) ) ),
 			'default_classes'     => self::sanitize_classes( (string) ( $value['default_classes'] ?? '' ) ),
 		);
 	}
@@ -182,7 +192,7 @@ final class Uplink_Editorial_Title {
 			'uplink-editorial-title-admin',
 			plugin_dir_url( __FILE__ ) . 'assets/admin.css',
 			array(),
-			self::VERSION
+			self::asset_version( 'assets/admin.css' )
 		);
 	}
 
@@ -214,6 +224,7 @@ final class Uplink_Editorial_Title {
 		$formats    = self::format_definitions();
 		?>
 		<div class="wrap uet-admin">
+			<h1 class="screen-reader-text"><?php echo esc_html( get_admin_page_title() ); ?></h1>
 			<header class="uet-admin__hero">
 				<div class="uet-admin__brand">
 					<span class="uet-admin__brand-mark" aria-hidden="true">
@@ -221,17 +232,16 @@ final class Uplink_Editorial_Title {
 					</span>
 					<div>
 						<span class="uet-admin__eyebrow"><?php esc_html_e( 'Editorial workflow', 'uplink-editorial-title' ); ?></span>
-						<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+						<div class="uet-admin__title" aria-hidden="true"><?php echo esc_html( get_admin_page_title() ); ?></div>
 						<p><?php esc_html_e( 'Give display titles expressive, controlled formatting without changing the canonical WordPress title.', 'uplink-editorial-title' ); ?></p>
 					</div>
 				</div>
 				<div class="uet-admin__badges" aria-label="<?php esc_attr_e( 'Plugin features', 'uplink-editorial-title' ); ?>">
 					<span><?php esc_html_e( 'Safe HTML', 'uplink-editorial-title' ); ?></span>
-					<span><?php esc_html_e( 'H1–H6', 'uplink-editorial-title' ); ?></span>
+					<span><?php esc_html_e( 'Paragraph or H1–H6', 'uplink-editorial-title' ); ?></span>
 				</div>
 			</header>
 
-			<?php settings_errors(); ?>
 			<form action="options.php" method="post">
 				<?php settings_fields( 'uplink_editorial_title' ); ?>
 				<div class="uet-admin__layout">
@@ -269,6 +279,7 @@ final class Uplink_Editorial_Title {
 								<?php endforeach; ?>
 							</fieldset>
 							<p class="uet-card__note"><?php esc_html_e( 'Disabling a format leaves stored title data intact, but excludes that markup from rendering and future saves.', 'uplink-editorial-title' ); ?></p>
+							<p class="uet-card__note"><?php esc_html_e( 'Underline is intentionally unavailable because readers may mistake it for a hyperlink. Sites that need the effect can use a custom CSS class or restyle an enabled inline format.', 'uplink-editorial-title' ); ?></p>
 						</section>
 
 						<section class="uet-card" aria-labelledby="uet-defaults-title">
@@ -278,14 +289,15 @@ final class Uplink_Editorial_Title {
 							</div>
 							<div class="uet-fields">
 								<div class="uet-field">
-									<label for="uet-default-level"><?php esc_html_e( 'Block heading level', 'uplink-editorial-title' ); ?></label>
+									<label for="uet-default-level"><?php esc_html_e( 'Site default block element', 'uplink-editorial-title' ); ?></label>
 									<div>
 										<select id="uet-default-level" name="<?php echo esc_attr( self::OPTION_SETTINGS ); ?>[default_block_level]">
+											<option value="0" <?php selected( $settings['default_block_level'], 0 ); ?>><?php esc_html_e( 'Paragraph', 'uplink-editorial-title' ); ?></option>
 											<?php for ( $level = 1; $level <= 6; $level++ ) : ?>
 												<option value="<?php echo esc_attr( (string) $level ); ?>" <?php selected( $settings['default_block_level'], $level ); ?>>H<?php echo esc_html( (string) $level ); ?></option>
 											<?php endfor; ?>
 										</select>
-										<p class="description"><?php esc_html_e( 'Used when a block has no explicit heading level.', 'uplink-editorial-title' ); ?></p>
+										<p class="description"><?php esc_html_e( 'New Editorial Title blocks inherit this site default. Choose Paragraph for display text that should not be part of the heading structure.', 'uplink-editorial-title' ); ?></p>
 									</div>
 								</div>
 								<div class="uet-field">
@@ -763,8 +775,8 @@ final class Uplink_Editorial_Title {
 		$settings      = self::get_settings();
 		$default_level = $settings['default_block_level'];
 		$level         = isset( $attributes['level'] ) ? (int) $attributes['level'] : $default_level;
-		$level         = max( 1, min( 6, $level ) );
-		$tag           = 'h' . $level;
+		$level         = max( 0, min( 6, $level ) );
+		$tag           = 0 === $level ? 'p' : 'h' . $level;
 
 		$classes  = array( 'wp-block-uplink-editorial-title' );
 		$defaults = $settings['default_classes'];
@@ -826,7 +838,7 @@ final class Uplink_Editorial_Title {
 				'wp-plugins',
 				'wp-rich-text',
 			),
-			self::VERSION,
+			self::asset_version( 'assets/editor.js' ),
 			true
 		);
 
@@ -847,7 +859,7 @@ final class Uplink_Editorial_Title {
 			'uplink-editorial-title-editor',
 			$asset_url . 'editor.css',
 			array( 'wp-edit-blocks' ),
-			self::VERSION
+			self::asset_version( 'assets/editor.css' )
 		);
 
 		wp_set_script_translations(

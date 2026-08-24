@@ -66,7 +66,10 @@
 	const ENABLED_POST_TYPES = Array.isArray(EDITOR_SETTINGS.enabledPostTypes)
 		? EDITOR_SETTINGS.enabledPostTypes
 		: null;
-	const DEFAULT_BLOCK_LEVEL = Math.max(1, Math.min(6, Number(EDITOR_SETTINGS.defaultBlockLevel) || 2));
+	const configuredBlockLevel = Number(EDITOR_SETTINGS.defaultBlockLevel);
+	const DEFAULT_BLOCK_LEVEL = Number.isInteger(configuredBlockLevel)
+		? Math.max(0, Math.min(6, configuredBlockLevel))
+		: 2;
 	const DEFAULT_CLASSES = typeof EDITOR_SETTINGS.defaultClasses === 'string'
 		? EDITOR_SETTINGS.defaultClasses.trim()
 		: '';
@@ -269,6 +272,12 @@
 		return sanitizeTitleHTML(html, false);
 	}
 
+	function plainTextToHTML(value) {
+		const container = document.createElement('div');
+		container.textContent = typeof value === 'string' ? value : '';
+		return container.innerHTML;
+	}
+
 	function findTextPosition(root, offset) {
 		const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
 		let remaining = Math.max(0, offset);
@@ -322,6 +331,9 @@
 		const [popoverAnchor, setPopoverAnchor] = useState(null);
 		const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
 		const [colorAnchor, setColorAnchor] = useState(null);
+		const [pendingBackgroundColor, setPendingBackgroundColor] = useState('');
+		const [pendingTextColor, setPendingTextColor] = useState('');
+		const [colorError, setColorError] = useState('');
 		const [selectionState, setSelectionState] = useState({
 			hasSelection: false,
 			active: {},
@@ -482,7 +494,24 @@
 			if (!selectionState.hasSelection) {
 				return;
 			}
+			setPendingBackgroundColor(selectionState.highlightBackgroundColor || '');
+			setPendingTextColor(selectionState.highlightTextColor || '');
+			setColorError('');
 			setColorPopoverOpen(true);
+		}
+
+		function applyAdvancedHighlightColor(attributeName) {
+			const color = attributeName === 'textColor'
+				? pendingTextColor.trim()
+				: pendingBackgroundColor.trim();
+
+			if (!color || !isSafeColorValue(color)) {
+				setColorError(__('Enter a valid CSS color value.', 'uplink-editorial-title'));
+				return;
+			}
+
+			setColorError('');
+			applyHighlightColor(attributeName, color);
 		}
 
 		useEffect(() => {
@@ -548,6 +577,15 @@
 			closeEditor();
 		}
 
+		function useCurrentTitle() {
+			if (typeof state.canonicalTitle !== 'string' || !state.canonicalTitle.trim()) {
+				return;
+			}
+
+			updateMeta(TITLE_META, plainTextToHTML(state.canonicalTitle));
+			setIsOpen(true);
+		}
+
 		return el(
 			PluginDocumentSettingPanel,
 			{
@@ -586,18 +624,27 @@
 							? el('span', { className: 'uplink-editorial-title__trigger-status' }, __('Using post title', 'uplink-editorial-title'))
 							: null
 					),
-					value
+					isFallback
 						? el(
 							Button,
 							{
 								variant: 'link',
+								className: 'uplink-editorial-title__action uplink-editorial-title__use-current',
+								onClick: useCurrentTitle,
+								disabled: typeof state.canonicalTitle !== 'string' || !state.canonicalTitle.trim(),
+							},
+							__('Use current title', 'uplink-editorial-title')
+						)
+						: el(
+							Button,
+							{
+								variant: 'link',
 								isDestructive: true,
-								className: 'uplink-editorial-title__reset',
+								className: 'uplink-editorial-title__action uplink-editorial-title__reset',
 								onClick: resetTitle,
 							},
 							__('Reset to post title', 'uplink-editorial-title')
-						)
-						: null,
+						),
 					isOpen && popoverAnchor
 						? el(
 							Popover,
@@ -680,18 +727,66 @@
 														{ name: 'color', title: __('Background', 'uplink-editorial-title') },
 													],
 												},
-												(tab) => el(ColorPalette, {
-													colors: editorColors,
-													value: tab.name === 'textColor'
-														? selectionState.highlightTextColor || undefined
-														: selectionState.highlightBackgroundColor || undefined,
-													onChange: (nextColor) => applyHighlightColor(tab.name, nextColor),
-													disableCustomColors: allowCustomColors === false,
-													enableAlpha: true,
-													clearable: true,
-													__experimentalIsRenderedInSidebar: true,
-													'aria-label': tab.title,
-												})
+												(tab) => {
+													const isTextColor = tab.name === 'textColor';
+													const pendingColor = isTextColor ? pendingTextColor : pendingBackgroundColor;
+
+													return el(
+														Fragment,
+														null,
+														el(ColorPalette, {
+															colors: editorColors,
+															value: isTextColor
+																? selectionState.highlightTextColor || undefined
+																: selectionState.highlightBackgroundColor || undefined,
+															onChange: (nextColor) => {
+																setColorError('');
+																if (isTextColor) {
+																	setPendingTextColor(nextColor || '');
+																} else {
+																	setPendingBackgroundColor(nextColor || '');
+																}
+																applyHighlightColor(tab.name, nextColor);
+															},
+															disableCustomColors: allowCustomColors === false,
+															enableAlpha: true,
+															clearable: true,
+															__experimentalIsRenderedInSidebar: true,
+															'aria-label': tab.title,
+														}),
+														el(
+															'div',
+															{ className: 'uplink-editorial-title__advanced-color' },
+															el(TextControl, {
+																label: __('CSS color value', 'uplink-editorial-title'),
+																help: __('Accepts var(--token), color-mix(...), and other valid CSS colors.', 'uplink-editorial-title'),
+																value: pendingColor,
+																onChange: (nextColor) => {
+																	setColorError('');
+																	if (isTextColor) {
+																		setPendingTextColor(nextColor);
+																	} else {
+																		setPendingBackgroundColor(nextColor);
+																	}
+																},
+																placeholder: isTextColor ? 'var(--text-color)' : 'color-mix(in oklch, yellow 50%, transparent)',
+																__nextHasNoMarginBottom: true,
+															}),
+															colorError
+																? el('p', { className: 'uplink-editorial-title__color-error', role: 'alert' }, colorError)
+																: null,
+															el(
+																Button,
+																{
+																	variant: 'secondary',
+																	onClick: () => applyAdvancedHighlightColor(tab.name),
+																	disabled: !pendingColor.trim(),
+																},
+																__('Apply CSS value', 'uplink-editorial-title')
+															)
+														)
+													);
+												}
 											)
 										)
 									)
@@ -758,8 +853,11 @@
 			edit: function EditorialTitleBlockEdit(props) {
 				const postId = props.context && props.context.postId;
 				const postType = props.context && props.context.postType;
-				const level = props.attributes.level || DEFAULT_BLOCK_LEVEL;
-				const tagName = 'h' + Math.max(1, Math.min(6, Number(level) || DEFAULT_BLOCK_LEVEL));
+				const attributeLevel = Number(props.attributes.level);
+				const level = Number.isInteger(attributeLevel)
+					? Math.max(0, Math.min(6, attributeLevel))
+					: DEFAULT_BLOCK_LEVEL;
+				const tagName = level === 0 ? 'p' : 'h' + level;
 				const previewClasses = ['uplink-editorial-title-block__preview', DEFAULT_CLASSES]
 					.filter(Boolean)
 					.join(' ');
@@ -792,7 +890,18 @@
 						el(HeadingLevelDropdown, {
 							value: level,
 							onChange: (nextLevel) => props.setAttributes({ level: Number(nextLevel) }),
-						})
+						}),
+						level !== 0
+							? el(
+								ToolbarGroup,
+								null,
+								el(ToolbarButton, {
+									icon: 'editor-paragraph',
+									label: __('Use paragraph', 'uplink-editorial-title'),
+									onClick: () => props.setAttributes({ level: 0 }),
+								})
+							)
+							: null
 					),
 					el(tagName, {
 						...blockProps,
