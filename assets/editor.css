@@ -59,7 +59,7 @@
 	color: #757575;
 }
 
-.uplink-editorial-title__reset {
+.uplink-editorial-title__action {
 	margin-block-start: 6px;
 	font-size: 12px;
 }
@@ -310,4 +310,21 @@
 
 .uplink-editorial-title__color-tabs .components-tab-panel__tab-content {
 	padding: 16px;
+}
+
+.uplink-editorial-title__advanced-color {
+	margin-block-start: 16px;
+	padding-block-start: 16px;
+	border-block-start: 1px solid #e0e0e0;
+}
+
+.uplink-editorial-title__advanced-color .components-base-control {
+	margin-block-end: 12px;
+}
+
+.uplink-editorial-title__color-error {
+	margin: 0 0 12px;
+	color: #b32d2e;
+	font-size: 12px;
+	line-height: 1.4;
 }

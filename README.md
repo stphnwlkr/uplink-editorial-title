@@ -1,6 +1,6 @@
 # Uplink Editorial Title
 
-**Version:** 1.2.1  
+**Version:** 1.0.0  
 **Requires WordPress:** 7.0+  
 **Tested through:** 7.1  
 **Requires PHP:** 8.3+
@@ -9,9 +9,11 @@ Uplink Editorial Title provides an optional, safely formatted display title whil
 
 Editors can apply only editorial inline formatting: **strong**, *emphasis*, `<mark>highlight</mark>`, strikethrough, subscript, and superscript. An optional CSS class list can also be stored per post.
 
+Underline is intentionally not included and is not planned for a future release. Underlined text is widely understood to be a hyperlink, so using it as decoration can make a title misleading. A site that deliberately wants this treatment can assign a custom CSS class to the editorial title and apply `text-decoration` in its theme CSS. The same approach can restyle an existing inline format such as strong, emphasis, or highlight.
+
 ## Settings
 
-Open **Settings → Editorial Title** to choose which eligible block-editor post types use Editorial Title and which inline formats are available. **Default Block Settings** controls the fallback heading level and optional classes for the Editorial Title block wrapper. New installations enable every eligible post type and every supported format.
+Open **Settings → Editorial Title** to choose which eligible block-editor post types use Editorial Title and which inline formats are available. **Default Block Settings** controls the fallback block element and optional classes for the Editorial Title block wrapper. New installations enable every eligible post type and every supported format.
 
 ## Core templates and patterns
 
@@ -23,7 +25,13 @@ Direct block markup:
 <!-- wp:uplink/editorial-title {"level":1} /-->
 ```
 
-The block supports H1-H6 through the native heading-level dropdown in its block toolbar. Core Additional CSS Classes and anchors are also supported. Block-default and per-post Editorial Title classes are appended automatically.
+While a heading is active, the block toolbar includes a **Use paragraph** button. Once Paragraph is active, that extra button disappears and the native element control shows P, avoiding duplicate controls. The plugin settings identify the site default block element. Paragraph renders a `<p>` element, so display or demonstration text does not enter the page's heading structure. Core Additional CSS Classes and anchors are also supported. Block-default and per-post Editorial Title classes are appended automatically.
+
+Paragraph block markup:
+
+```html
+<!-- wp:uplink/editorial-title {"level":0} /-->
+```
 
 ## PHP
 
@@ -63,3 +71,5 @@ Editorial HTML is limited server-side to the formats enabled in the settings scr
 ## Highlight colors
 
 Select text and open Highlight to choose separate Text and Background colors from WordPress's native color palette. Theme and editor palette colors appear automatically, and the custom color control follows the site's editor settings. Clearing both colors removes the highlight format.
+
+The CSS color value field also accepts validated advanced values such as `var(--primary)` and `color-mix(in oklch, yellow 50%, transparent)`.

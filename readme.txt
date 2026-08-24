@@ -4,7 +4,7 @@ Tags: editorial, title, gutenberg, block editor, dynamic data
 Requires at least: 7.0
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 1.2.1
+Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,7 +23,16 @@ Allowed inline markup is deliberately restricted to:
 * subscript
 * superscript
 
+Underline is intentionally not included and is not planned for a future release. Underlined text is widely understood to be a hyperlink, so using it as decoration can make a title misleading. A site that deliberately wants this treatment can assign a custom CSS class to the editorial title and apply `text-decoration` in its theme CSS. The same approach can restyle an existing inline format such as strong, emphasis, or highlight.
+
 The plugin also stores an optional space-separated CSS class list. The standard WordPress title is never replaced globally.
+
+== Installation ==
+
+1. Upload the plugin ZIP through Plugins > Add New > Upload Plugin, or copy the `uplink-editorial-title` directory to `/wp-content/plugins/`.
+2. Activate Uplink Editorial Title from the Plugins screen.
+3. Open Settings > Editorial Title to choose enabled post types, formats, and block defaults.
+4. Edit a supported post and open the Editorial Title panel in the editor sidebar.
 
 == Settings ==
 
@@ -31,10 +40,10 @@ Open Settings > Editorial Title to choose:
 
 * Enabled block-editor post types
 * Allowed inline title formats
-* The default heading level for Editorial Title blocks without an explicit level
+* The default paragraph or heading element for Editorial Title blocks without an explicit level
 * Optional default CSS classes added only to the Editorial Title block wrapper
 
-The heading level and CSS class controls appear together under Default Block Settings.
+The block element and CSS class controls appear together under Default Block Settings.
 
 All eligible post types and all supported formats are enabled until an administrator saves a different selection.
 
@@ -44,11 +53,15 @@ Insert the Editorial Title block from the Theme block category in the Site Edito
 
 The block is dynamic and uses the current post context. It therefore works in singular templates and in post-context containers such as Query Loop items.
 
-The block defaults to the heading level selected in the plugin settings and provides an H1-H6 heading-level control. Block-default and per-post Editorial Title classes are added automatically. Core Additional CSS Classes and anchor support are also available on the block.
+The block defaults to the site default element selected in the plugin settings. While a heading is active, its toolbar includes a Use paragraph button. Once Paragraph is active, that extra button disappears and the native element control shows P, avoiding duplicate controls. Paragraph renders a `<p>` element, so display or demonstration text does not enter the page's heading structure. Block-default and per-post Editorial Title classes are added automatically. Core Additional CSS Classes and anchor support are also available on the block.
 
 Block markup for a pattern or template can also be written directly:
 
 `<!-- wp:uplink/editorial-title {"level":1} /-->`
+
+Paragraph markup uses level `0`:
+
+`<!-- wp:uplink/editorial-title {"level":0} /-->`
 
 == PHP usage ==
 
@@ -90,45 +103,16 @@ Editorial title markup is sanitized against the administrator-selected strict HT
 
 == Changelog ==
 
-= 1.2.1 =
-* Polishes the settings screen with the established UplinkPress visual system and responsive card layout.
-* Adds the UplinkPress logo to the settings screen.
-* Adds a direct Settings link on the WordPress Plugins screen.
-
-= 1.2.0 =
-* Adds Settings > Editorial Title for choosing enabled post types and allowed inline formats.
-* Enables every eligible post type and supported format by default.
-* Adds a configurable default heading level for newly inserted Editorial Title blocks.
-* Adds sanitized default CSS classes to the Editorial Title block wrapper.
-
-= 1.1.3 =
-* Fixes the expanded RichText editor so saved text and background highlight colors render immediately and after reload.
-* Keeps inline preview styles editor-only and converts them back to validated data before saving.
-* Fixes active toolbar button contrast during hover and keyboard focus.
-
-= 1.1.2 =
-* Adds native-style Text and Background tabs to the Highlight color control.
-* Adds a separately validated text color for highlighted title text.
-* Fixes the expanded editor preview so assigned highlight colors replace the browser's default yellow.
-* Adds the native H1-H6 heading-level dropdown to the Editorial Title block toolbar.
-
-= 1.1.1 =
-* Fixes custom highlight colors being passed to Gutenberg's format toggler as an object-shaped format type.
-* Replaces the free-form CSS color field with WordPress's native color palette, including theme and editor colors.
-* Respects the editor's custom-color setting while keeping existing saved advanced color values compatible.
-
-= 1.1.0 =
-* Adds a native-style highlight color picker.
-* Adds a CSS color-value field for custom properties such as `var(--primary)` and modern functions such as `color-mix(...)`.
-* Stores highlight color as constrained data and converts it to `background-color` only after server-side validation.
-* Keeps uncolored `<mark>` elements theme-driven.
-
 = 1.0.0 =
-* Initial normalized release.
+* Initial WordPress.org release.
 * Requires WordPress 7.0 or later and PHP 8.3 or later.
 * Tested through WordPress 7.1.
-* Provides the polished contextual editorial-title editor with strong, emphasis, highlight, strikethrough, subscript, and superscript formatting.
-* Adds per-post CSS class assignment.
-* Adds native Etch post dynamic data.
-* Adds native Bricks Post-group dynamic-data tags.
+* Adds the contextual editorial-title editor with configurable strong, emphasis, highlight, strikethrough, subscript, and superscript formatting.
+* Adds separate Use current title and Reset to post title sidebar actions while keeping the formatting popover focused on editing.
+* Adds validated text and background highlight colors through the native palette and advanced CSS values such as `var(...)` and `color-mix(...)`.
+* Adds per-post and default CSS class assignment.
+* Adds settings for post types, allowed formats, default heading level, and default block classes.
 * Adds a dynamic Editorial Title block for core templates and patterns.
+* Supports paragraph output when an editorial title should not enter the document heading structure.
+* Adds native Etch post data and Bricks Post-group dynamic-data tags.
+* Prevents object-shaped RichText format values from corrupting saved markup.
