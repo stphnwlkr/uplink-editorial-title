@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Uplink Editorial Title</title>
+  <desc id="desc">The Uplink mark above the words Editorial Title in a rounded square.</desc>
+  <rect width="256" height="256" rx="31" fill="#f5f7fa"/>
+  <rect x="2" y="2" width="252" height="252" rx="29" fill="none" stroke="#cadbea" stroke-width="2.5"/>
+
+  <g transform="translate(51 24) scale(.11579)">
+    <path d="M809.78,205.91h163.72c82.88,0,150.69,67.84,150.69,150.76s-67.84,150.76-150.69,150.76h-195.75v205.91h195.78c196.07,0,356.47-160.48,356.47-356.68S1169.51,0,973.53,0h-273.83c36.8,68.57,73.42,137.26,110.08,205.91Z" fill="#003362" fill-rule="evenodd"/>
+    <path d="M507.19,349.08v364.24c0,82.86-67.78,150.76-150.69,150.76s-150.69-67.84-150.69-150.76v-356.68H0v356.71c0,196.14,160.4,356.65,356.5,356.65s356.5-160.48,356.5-356.65v-364.42c12.8,4.39,26.27,9.52,40.64,15.25,27.75,11.09,58.99-11.99,44.25-43.13-55.1-103.09-107.69-202.01-163.2-305.25-11.32-21.04-38.05-21.04-49.34-.03-55.5,103.29-108.1,202.19-163.2,305.28-14.78,31.14,16.49,54.22,44.22,43.13,14.49-5.79,28.01-10.83,40.81-15.11Z" fill="#0071cc" fill-rule="evenodd"/>
+  </g>
+
+  <rect x="43" y="156" width="170" height="5" rx="2.5" fill="#0071cc"/>
+  <g fill="#082f59" font-family="Arial, Helvetica, sans-serif" font-weight="700" text-anchor="middle">
+    <text x="128" y="194" font-size="21" letter-spacing=".35">EDITORIAL</text>
+    <text x="128" y="220" font-size="21" letter-spacing=".4">TITLE</text>
+  </g>
+</svg>

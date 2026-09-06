@@ -1,6 +1,6 @@
 # Uplink Editorial Title
 
-**Version:** 1.0.1  
+**Version:** 1.0.0  
 **Requires WordPress:** 7.0+  
 **Tested through:** 7.1  
 **Requires PHP:** 8.3+

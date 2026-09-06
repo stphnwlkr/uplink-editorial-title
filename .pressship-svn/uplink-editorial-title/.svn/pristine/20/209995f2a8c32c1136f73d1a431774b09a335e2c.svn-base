@@ -1,10 +1,10 @@
 === Uplink Editorial Title ===
-Contributors: stphnwlkr
+Contributors: uplinkpress
 Tags: editorial, title, gutenberg, block editor, dynamic data
 Requires at least: 7.0
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 1.0.1
+Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -63,8 +63,6 @@ Paragraph markup uses level `0`:
 
 `<!-- wp:uplink/editorial-title {"level":0} /-->`
 
-Both forms are self-closing dynamic blocks.
-
 == PHP usage ==
 
 `uplink_get_editorial_title( $post )`
@@ -104,9 +102,6 @@ The plugin adds these tags to the Post dynamic-data group:
 Editorial title markup is sanitized against the administrator-selected strict HTML allowlist. Highlight text and background colors are stored as validated data and rendered only as `color` and `background-color` values. CSS class values are sanitized individually. Settings require administrator access, and meta writes require permission to edit the target post.
 
 == Changelog ==
-
-= 1.0.1 =
-* Corrected the plugin author metadata to identify Stephen Walker and link to the `stphnwlkr` WordPress.org profile.
 
 = 1.0.0 =
 * Initial WordPress.org release.

@@ -2,11 +2,10 @@
 /**
  * Plugin Name:       Uplink Editorial Title
  * Description:       Adds an optional editorial display title with safe inline formatting and CSS class assignment to the WordPress block editor.
- * Version:           1.0.1
+ * Version:           1.0.0
  * Requires at least: 7.0
  * Requires PHP:      8.3
- * Author:            Stephen Walker
- * Author URI:        https://profiles.wordpress.org/stphnwlkr/
+ * Author:            Uplink.Press
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       uplink-editorial-title
@@ -17,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 final class Uplink_Editorial_Title {
-	public const VERSION         = '1.0.1';
+	public const VERSION         = '1.0.0';
 	public const META_TITLE      = 'uplink_editorial_title';
 	public const META_CLASS      = 'uplink_editorial_title_class';
 	public const OPTION_SETTINGS = 'uplink_editorial_title_settings';
