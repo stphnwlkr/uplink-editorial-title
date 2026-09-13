@@ -1,13 +1,13 @@
 # Uplink Editorial Title
 
-**Version:** 1.0.1  
-**Requires WordPress:** 7.0+  
-**Tested through:** 7.1  
+**Version:** 1.1.0
+**Requires WordPress:** 7.0+
+**Tested through:** 7.1
 **Requires PHP:** 8.3+
 
 Uplink Editorial Title provides an optional, safely formatted display title while leaving the canonical WordPress title untouched.
 
-Editors can apply only editorial inline formatting: **strong**, *emphasis*, `<mark>highlight</mark>`, strikethrough, subscript, and superscript. An optional CSS class list can also be stored per post.
+Editors can apply only editorial inline formatting: **strong**, *emphasis*, `<mark>highlight</mark>`, inline spans with CSS classes, strikethrough, subscript, and superscript. An optional CSS class list can also be stored on the title wrapper.
 
 Underline is intentionally not included and is not planned for a future release. Underlined text is widely understood to be a hyperlink, so using it as decoration can make a title misleading. A site that deliberately wants this treatment can assign a custom CSS class to the editorial title and apply `text-decoration` in its theme CSS. The same approach can restyle an existing inline format such as strong, emphasis, or highlight.
 
@@ -70,6 +70,10 @@ Editorial HTML is limited server-side to the formats enabled in the settings scr
 
 ## Highlight colors
 
-Select text and open Highlight to choose separate Text and Background colors from WordPress's native color palette. Theme and editor palette colors appear automatically, and the custom color control follows the site's editor settings. Clearing both colors removes the highlight format.
+Select text and open Highlight to choose separate Text and Background colors from WordPress's native color palette. Theme and editor palette colors appear automatically, and the custom color control follows the site's editor settings. The picker checks the draft color pair against WCAG contrast thresholds. Choose Apply changes to save both colors. Clear resets the active Text or Background color, and the close button dismisses the picker without saving. Clearing both colors removes the highlight format when the changes are applied.
 
 The CSS color value field also accepts validated advanced values such as `var(--primary)` and `color-mix(in oklch, yellow 50%, transparent)`.
+
+## Inline CSS classes
+
+Select title text and choose Inline CSS class to wrap it in a `<span>`. Enter one or more space-separated class names. The plugin sanitizes each class and outputs only those classes on the front end, so border, radius, padding, and other presentation remain in the site stylesheet.

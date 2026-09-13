@@ -33,6 +33,7 @@
 		create,
 		getActiveFormat,
 		registerFormatType,
+		removeFormat,
 		toHTMLString,
 		toggleFormat,
 	} = wp.richText;
@@ -40,13 +41,17 @@
 	const TITLE_META = 'uplink_editorial_title';
 	const CLASS_META = 'uplink_editorial_title_class';
 	const HIGHLIGHT_FORMAT = 'uplink-editorial-title/highlight';
+	const INLINE_CLASS_FORMAT = 'uplink-editorial-title/inline-class';
 	const HIGHLIGHT_ATTRIBUTE = 'data-uet-mark-color';
 	const HIGHLIGHT_TEXT_ATTRIBUTE = 'data-uet-mark-text-color';
+	const INLINE_CLASS_ATTRIBUTE = 'data-uet-inline-class';
+	const INLINE_CLASS_MARKER = 'uet-inline-class';
 	const EDITOR_SETTINGS = window.uplinkEditorialTitleSettings || {};
 	const ALL_FORMATS = [
 		'core/bold',
 		'core/italic',
 		HIGHLIGHT_FORMAT,
+		INLINE_CLASS_FORMAT,
 		'core/strikethrough',
 		'core/subscript',
 		'core/superscript',
@@ -55,6 +60,7 @@
 		'core/bold': 'STRONG',
 		'core/italic': 'EM',
 		[HIGHLIGHT_FORMAT]: 'MARK',
+		[INLINE_CLASS_FORMAT]: 'SPAN',
 		'core/strikethrough': 'S',
 		'core/subscript': 'SUB',
 		'core/superscript': 'SUP',
@@ -78,6 +84,7 @@
 		{ type: 'core/bold', label: __('Bold', 'uplink-editorial-title'), glyph: 'B', className: 'is-bold' },
 		{ type: 'core/italic', label: __('Italic', 'uplink-editorial-title'), glyph: 'I', className: 'is-italic' },
 		{ type: HIGHLIGHT_FORMAT, label: __('Highlight', 'uplink-editorial-title'), glyph: 'A', className: 'is-mark' },
+		{ type: INLINE_CLASS_FORMAT, label: __('Inline CSS class', 'uplink-editorial-title'), glyph: '<>', className: 'is-inline-class' },
 		{ type: 'core/strikethrough', label: __('Strikethrough', 'uplink-editorial-title'), glyph: 'S', className: 'is-strike' },
 		{ type: 'core/subscript', label: __('Subscript', 'uplink-editorial-title'), glyph: 'X₂', className: 'is-script' },
 		{ type: 'core/superscript', label: __('Superscript', 'uplink-editorial-title'), glyph: 'X²', className: 'is-script' },
@@ -85,11 +92,11 @@
 
 	function registerEditorialFormats() {
 		const richTextStore = select('core/rich-text');
-		const existing = richTextStore && typeof richTextStore.getFormatType === 'function'
+		const existingHighlight = richTextStore && typeof richTextStore.getFormatType === 'function'
 			? richTextStore.getFormatType(HIGHLIGHT_FORMAT)
 			: null;
 
-		if (!existing) {
+		if (!existingHighlight) {
 			registerFormatType(HIGHLIGHT_FORMAT, {
 				title: __('Highlight', 'uplink-editorial-title'),
 				tagName: 'mark',
@@ -101,6 +108,56 @@
 				},
 			});
 		}
+
+		const existingInlineClass = richTextStore && typeof richTextStore.getFormatType === 'function'
+			? richTextStore.getFormatType(INLINE_CLASS_FORMAT)
+			: null;
+
+		if (!existingInlineClass) {
+			registerFormatType(INLINE_CLASS_FORMAT, {
+				title: __('Inline CSS class', 'uplink-editorial-title'),
+				tagName: 'span',
+				className: INLINE_CLASS_MARKER,
+				attributes: {
+					inlineClass: INLINE_CLASS_ATTRIBUTE,
+				},
+			});
+		}
+	}
+
+	function sanitizeClassList(value) {
+		if (typeof value !== 'string') {
+			return '';
+		}
+
+		const classes = value.trim().split(/\s+/).map((className) => className
+			.replace(/%[a-f0-9]{2}/gi, '')
+			.replace(/[^a-z0-9_-]/gi, '')
+		).filter((className) => className && className !== INLINE_CLASS_MARKER);
+
+		return Array.from(new Set(classes)).join(' ');
+	}
+
+	function isValidClassList(value) {
+		if (typeof value !== 'string' || value.length > 500) {
+			return false;
+		}
+
+		const classes = value.trim();
+		return !classes || classes.split(/\s+/).every((className) => /^[a-z0-9_-]+$/i.test(className));
+	}
+
+	function getInlineClasses(element) {
+		if (!element || element.tagName !== 'SPAN') {
+			return '';
+		}
+
+		const storedClasses = element.getAttribute(INLINE_CLASS_ATTRIBUTE) || '';
+		const visibleClasses = Array.from(element.classList)
+			.filter((className) => className !== INLINE_CLASS_MARKER)
+			.join(' ');
+
+		return sanitizeClassList(storedClasses || visibleClasses);
 	}
 
 	function isSafeColorValue(value) {
@@ -189,6 +246,119 @@
 		return getMarkColors(mark);
 	}
 
+	function colorToRgba(value) {
+		const canvas = document.createElement('canvas');
+		canvas.width = 1;
+		canvas.height = 1;
+		const context = canvas.getContext('2d', { willReadFrequently: true });
+
+		if (!context) {
+			return null;
+		}
+
+		context.clearRect(0, 0, 1, 1);
+		context.fillStyle = value;
+		context.fillRect(0, 0, 1, 1);
+		const pixel = context.getImageData(0, 0, 1, 1).data;
+
+		return {
+			r: pixel[0],
+			g: pixel[1],
+			b: pixel[2],
+			a: pixel[3] / 255,
+		};
+	}
+
+	function compositeColors(foreground, background) {
+		const alpha = foreground.a + background.a * (1 - foreground.a);
+		if (!alpha) {
+			return { r: 0, g: 0, b: 0, a: 0 };
+		}
+
+		return {
+			r: (foreground.r * foreground.a + background.r * background.a * (1 - foreground.a)) / alpha,
+			g: (foreground.g * foreground.a + background.g * background.a * (1 - foreground.a)) / alpha,
+			b: (foreground.b * foreground.a + background.b * background.a * (1 - foreground.a)) / alpha,
+			a: alpha,
+		};
+	}
+
+	function getElementBackground(element) {
+		let background = { r: 0, g: 0, b: 0, a: 0 };
+		let current = element;
+
+		while (current && current.nodeType === Node.ELEMENT_NODE) {
+			const layer = colorToRgba(window.getComputedStyle(current).backgroundColor);
+			if (layer) {
+				background = compositeColors(background, layer);
+			}
+			current = current.parentElement;
+		}
+
+		return compositeColors(background, { r: 255, g: 255, b: 255, a: 1 });
+	}
+
+	function getRelativeLuminance(color) {
+		const channels = [color.r, color.g, color.b].map((channel) => {
+			const value = channel / 255;
+			return value <= 0.04045
+				? value / 12.92
+				: Math.pow((value + 0.055) / 1.055, 2.4);
+		});
+
+		return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+	}
+
+	function getHighlightContrast(editorElement, backgroundColor, textColor) {
+		if (!editorElement) {
+			return null;
+		}
+
+		if (
+			(backgroundColor && !isSafeColorValue(backgroundColor)) ||
+			(textColor && !isSafeColorValue(textColor))
+		) {
+			return { ratio: null, level: 'unknown' };
+		}
+
+		const sample = document.createElement('mark');
+		sample.textContent = 'Aa';
+		sample.style.position = 'absolute';
+		sample.style.visibility = 'hidden';
+		sample.style.pointerEvents = 'none';
+		if (backgroundColor) {
+			sample.style.backgroundColor = backgroundColor;
+		} else if (textColor) {
+			sample.style.backgroundColor = 'transparent';
+		}
+		if (textColor) {
+			sample.style.color = textColor;
+		}
+
+		editorElement.appendChild(sample);
+		const computedStyle = window.getComputedStyle(sample);
+		const foreground = colorToRgba(computedStyle.color);
+		const highlightBackground = colorToRgba(computedStyle.backgroundColor);
+		const editorBackground = getElementBackground(editorElement);
+		sample.remove();
+
+		if (!foreground || !highlightBackground) {
+			return null;
+		}
+
+		const background = compositeColors(highlightBackground, editorBackground);
+		const opaqueForeground = compositeColors(foreground, background);
+		const foregroundLuminance = getRelativeLuminance(opaqueForeground);
+		const backgroundLuminance = getRelativeLuminance(background);
+		const ratio = (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+			(Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
+
+		return {
+			ratio,
+			level: ratio >= 7 ? 'aaa' : ratio >= 4.5 ? 'aa' : ratio >= 3 ? 'large' : 'fail',
+		};
+	}
+
 	function styleMarks(root) {
 		if (!root) {
 			return;
@@ -214,8 +384,8 @@
 
 	/**
 	 * Build preview HTML from the same strict element allowlist used server-side.
-	 * Unknown elements are unwrapped. Only the validated mark color data attribute
-	 * is retained, and it is converted to background-color for the editor preview.
+	 * Unknown elements are unwrapped. Mark colors and inline span classes are
+	 * normalized before storage or preview.
 	 */
 	function sanitizeTitleHTML(html, includeStyles) {
 		if (!html) {
@@ -254,6 +424,16 @@
 					if (style) {
 						nextDestination.setAttribute('style', style);
 					}
+				}
+			}
+
+			if (allowed && node.tagName === 'SPAN') {
+				const classes = getInlineClasses(node);
+				nextDestination.className = includeStyles && classes
+					? INLINE_CLASS_MARKER + ' ' + classes
+					: INLINE_CLASS_MARKER;
+				if (classes) {
+					nextDestination.setAttribute(INLINE_CLASS_ATTRIBUTE, classes);
 				}
 			}
 
@@ -331,14 +511,21 @@
 		const [popoverAnchor, setPopoverAnchor] = useState(null);
 		const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
 		const [colorAnchor, setColorAnchor] = useState(null);
+		const [classPopoverOpen, setClassPopoverOpen] = useState(false);
+		const [classAnchor, setClassAnchor] = useState(null);
 		const [pendingBackgroundColor, setPendingBackgroundColor] = useState('');
 		const [pendingTextColor, setPendingTextColor] = useState('');
+		const [pendingInlineClass, setPendingInlineClass] = useState('');
+		const [activeColorTab, setActiveColorTab] = useState('textColor');
 		const [colorError, setColorError] = useState('');
+		const [classError, setClassError] = useState('');
+		const [contrastResult, setContrastResult] = useState(null);
 		const [selectionState, setSelectionState] = useState({
 			hasSelection: false,
 			active: {},
 			highlightBackgroundColor: '',
 			highlightTextColor: '',
+			inlineClass: '',
 		});
 		const editorShellRef = useRef(null);
 		const savedRangeRef = useRef(null);
@@ -396,6 +583,7 @@
 			const active = {};
 			let highlightBackgroundColor = '';
 			let highlightTextColor = '';
+			let inlineClass = '';
 			FORMAT_CONTROLS.forEach((control) => {
 				const format = getActiveFormat(richValue, control.type);
 				active[control.type] = Boolean(format);
@@ -404,6 +592,9 @@
 					highlightBackgroundColor = colors.backgroundColor;
 					highlightTextColor = colors.textColor;
 				}
+				if (control.type === INLINE_CLASS_FORMAT && format && format.attributes) {
+					inlineClass = sanitizeClassList(format.attributes.inlineClass || '');
+				}
 			});
 
 			setSelectionState({
@@ -411,6 +602,7 @@
 				active,
 				highlightBackgroundColor,
 				highlightTextColor,
+				inlineClass,
 			});
 		}
 
@@ -440,7 +632,7 @@
 			}
 		}
 
-		function applyHighlightColor(attributeName, color) {
+		function applyHighlightColors(backgroundColor, textColor) {
 			const editorElement = getEditorElement();
 			const range = savedRangeRef.current;
 
@@ -448,26 +640,26 @@
 				return;
 			}
 
-			const normalized = typeof color === 'string' ? color.trim() : '';
-			if (normalized && !isSafeColorValue(normalized)) {
+			const normalizedBackgroundColor = typeof backgroundColor === 'string' ? backgroundColor.trim() : '';
+			const normalizedTextColor = typeof textColor === 'string' ? textColor.trim() : '';
+			if (
+				(normalizedBackgroundColor && !isSafeColorValue(normalizedBackgroundColor)) ||
+				(normalizedTextColor && !isSafeColorValue(normalizedTextColor))
+			) {
 				return;
 			}
 
 			const attributes = {};
-			const backgroundColor = attributeName === 'color'
-				? normalized
-				: selectionState.highlightBackgroundColor;
-			const textColor = attributeName === 'textColor'
-				? normalized
-				: selectionState.highlightTextColor;
-
-			if (backgroundColor) {
-				attributes.color = backgroundColor;
+			if (normalizedBackgroundColor) {
+				attributes.color = normalizedBackgroundColor;
 			}
-			if (textColor) {
-				attributes.textColor = textColor;
+			if (normalizedTextColor) {
+				attributes.textColor = normalizedTextColor;
 			}
-			attributes.style = getMarkStyle({ backgroundColor, textColor });
+			attributes.style = getMarkStyle({
+				backgroundColor: normalizedBackgroundColor,
+				textColor: normalizedTextColor,
+			});
 
 			if (!attributes.color && !attributes.textColor) {
 				removeHighlight();
@@ -496,23 +688,98 @@
 			}
 			setPendingBackgroundColor(selectionState.highlightBackgroundColor || '');
 			setPendingTextColor(selectionState.highlightTextColor || '');
+			setActiveColorTab('textColor');
 			setColorError('');
+			setClassPopoverOpen(false);
 			setColorPopoverOpen(true);
 		}
 
-		function applyAdvancedHighlightColor(attributeName) {
-			const color = attributeName === 'textColor'
-				? pendingTextColor.trim()
-				: pendingBackgroundColor.trim();
+		function openInlineClassEditor() {
+			if (!selectionState.hasSelection) {
+				return;
+			}
 
-			if (!color || !isSafeColorValue(color)) {
+			setPendingInlineClass(selectionState.inlineClass || '');
+			setClassError('');
+			setColorPopoverOpen(false);
+			setClassPopoverOpen(true);
+		}
+
+		function applyPendingInlineClass() {
+			const editorElement = getEditorElement();
+			const range = savedRangeRef.current;
+			const classes = pendingInlineClass.trim();
+
+			if (!isValidClassList(classes)) {
+				setClassError(__('Use letters, numbers, hyphens, and underscores only.', 'uplink-editorial-title'));
+				return;
+			}
+
+			if (!editorElement || !range || range.collapsed || !editorElement.contains(range.commonAncestorContainer)) {
+				return;
+			}
+
+			setClassError('');
+			setClassPopoverOpen(false);
+
+			try {
+				const richValue = create({ element: editorElement, range });
+				if (!classes) {
+					commitRichValue(removeFormat(richValue, INLINE_CLASS_FORMAT));
+					return;
+				}
+
+				commitRichValue(applyRichTextFormat(richValue, {
+					type: INLINE_CLASS_FORMAT,
+					attributes: { inlineClass: sanitizeClassList(classes) },
+				}));
+			} catch (error) {
+				return;
+			}
+		}
+
+		function clearPendingHighlightColor() {
+			setColorError('');
+			if (activeColorTab === 'textColor') {
+				setPendingTextColor('');
+			} else {
+				setPendingBackgroundColor('');
+			}
+		}
+
+		function applyPendingHighlightColors() {
+			const backgroundColor = pendingBackgroundColor.trim();
+			const textColor = pendingTextColor.trim();
+
+			if (
+				(backgroundColor && !isSafeColorValue(backgroundColor)) ||
+				(textColor && !isSafeColorValue(textColor))
+			) {
 				setColorError(__('Enter a valid CSS color value.', 'uplink-editorial-title'));
 				return;
 			}
 
 			setColorError('');
-			applyHighlightColor(attributeName, color);
+			setColorPopoverOpen(false);
+			applyHighlightColors(backgroundColor, textColor);
 		}
+
+		useEffect(() => {
+			if (!colorPopoverOpen) {
+				setContrastResult(null);
+				return undefined;
+			}
+
+			const frame = window.requestAnimationFrame(() => {
+				setContrastResult(getHighlightContrast(
+					getEditorElement(),
+					pendingBackgroundColor.trim(),
+					pendingTextColor.trim()
+				));
+			});
+
+			return () => window.cancelAnimationFrame(frame);
+		}, [colorPopoverOpen, pendingBackgroundColor, pendingTextColor]);
 
 		useEffect(() => {
 			if (!isOpen) {
@@ -562,6 +829,7 @@
 
 		function closeEditor() {
 			setColorPopoverOpen(false);
+			setClassPopoverOpen(false);
 			setIsOpen(false);
 			savedRangeRef.current = null;
 			setSelectionState({
@@ -569,6 +837,7 @@
 				active: {},
 				highlightBackgroundColor: '',
 				highlightTextColor: '',
+				inlineClass: '',
 			});
 		}
 
@@ -656,6 +925,7 @@
 								resize: false,
 								expandOnMobile: true,
 								focusOnMount: false,
+								onFocusOutside: () => {},
 								onClose: closeEditor,
 								className: 'uplink-editorial-title__popover',
 							},
@@ -675,23 +945,28 @@
 										},
 										el(
 											ToolbarGroup,
-											null,
+											{ style: { '--uet-format-count': FORMAT_CONTROLS.length } },
 											FORMAT_CONTROLS.map((control) => {
 												const isHighlight = control.type === HIGHLIGHT_FORMAT;
+												const isInlineClass = control.type === INLINE_CLASS_FORMAT;
 												return el(
 													ToolbarButton,
-												{
-													key: control.type,
-													ref: isHighlight ? setColorAnchor : undefined,
-													label: control.label,
-													isActive: Boolean(selectionState.active[control.type]),
-													disabled: !selectionState.hasSelection,
-													onMouseDown: (event) => event.preventDefault(),
-													onClick: isHighlight ? openHighlightPicker : () => toggleSelectedFormat(control.type),
-													className: 'uplink-editorial-title__format-button ' + control.className,
-													style: isHighlight ? { '--uet-highlight-indicator': selectionState.highlightBackgroundColor || '#f7d84a' } : undefined,
-												},
-												el('span', { 'aria-hidden': 'true' }, control.glyph)
+													{
+														key: control.type,
+														ref: isHighlight ? setColorAnchor : isInlineClass ? setClassAnchor : undefined,
+														label: control.label,
+														isActive: Boolean(selectionState.active[control.type]),
+														disabled: !selectionState.hasSelection,
+														onMouseDown: (event) => event.preventDefault(),
+														onClick: isHighlight
+															? openHighlightPicker
+															: isInlineClass
+																? openInlineClassEditor
+																: () => toggleSelectedFormat(control.type),
+														className: 'uplink-editorial-title__format-button ' + control.className,
+														style: isHighlight ? { '--uet-highlight-indicator': selectionState.highlightBackgroundColor || '#f7d84a' } : undefined,
+													},
+													el('span', { 'aria-hidden': 'true' }, control.glyph)
 												);
 											})
 										)
@@ -706,6 +981,7 @@
 											offset: 8,
 											shift: true,
 											focusOnMount: 'firstElement',
+											onFocusOutside: () => {},
 											onClose: () => setColorPopoverOpen(false),
 											className: 'uplink-editorial-title__color-popover',
 										},
@@ -716,12 +992,19 @@
 												role: 'dialog',
 												'aria-label': __('Highlight colors', 'uplink-editorial-title'),
 											},
+											el(Button, {
+												icon: 'no-alt',
+												label: __('Close color picker', 'uplink-editorial-title'),
+												className: 'uplink-editorial-title__color-close',
+												onClick: () => setColorPopoverOpen(false),
+											}),
 											el(
 												TabPanel,
 												{
 													className: 'uplink-editorial-title__color-tabs',
 													activeClass: 'is-active',
 													initialTabName: 'textColor',
+													onSelect: setActiveColorTab,
 													tabs: [
 														{ name: 'textColor', title: __('Text', 'uplink-editorial-title') },
 														{ name: 'color', title: __('Background', 'uplink-editorial-title') },
@@ -736,9 +1019,7 @@
 														null,
 														el(ColorPalette, {
 															colors: editorColors,
-															value: isTextColor
-																? selectionState.highlightTextColor || undefined
-																: selectionState.highlightBackgroundColor || undefined,
+															value: pendingColor || undefined,
 															onChange: (nextColor) => {
 																setColorError('');
 																if (isTextColor) {
@@ -746,11 +1027,10 @@
 																} else {
 																	setPendingBackgroundColor(nextColor || '');
 																}
-																applyHighlightColor(tab.name, nextColor);
 															},
 															disableCustomColors: allowCustomColors === false,
 															enableAlpha: true,
-															clearable: true,
+															clearable: false,
 															__experimentalIsRenderedInSidebar: true,
 															'aria-label': tab.title,
 														}),
@@ -774,19 +1054,134 @@
 															}),
 															colorError
 																? el('p', { className: 'uplink-editorial-title__color-error', role: 'alert' }, colorError)
-																: null,
-															el(
-																Button,
-																{
-																	variant: 'secondary',
-																	onClick: () => applyAdvancedHighlightColor(tab.name),
-																	disabled: !pendingColor.trim(),
-																},
-																__('Apply CSS value', 'uplink-editorial-title')
-															)
+																: null
 														)
 													);
 												}
+											),
+											contrastResult
+												? el(
+													'div',
+													{
+														className: 'uplink-editorial-title__contrast is-' + contrastResult.level,
+														role: 'status',
+														'aria-live': 'polite',
+													},
+													contrastResult.ratio === null
+														? __('Enter valid colors to check contrast.', 'uplink-editorial-title')
+														: el(
+															Fragment,
+															null,
+															el('strong', null, __('Contrast', 'uplink-editorial-title') + ' ' + contrastResult.ratio.toFixed(2) + ':1'),
+															el(
+																'span',
+																null,
+																contrastResult.level === 'aaa'
+																	? __('Passes AAA.', 'uplink-editorial-title')
+																	: contrastResult.level === 'aa'
+																		? __('Passes AA.', 'uplink-editorial-title')
+																		: contrastResult.level === 'large'
+																			? __('Passes AA for large text only.', 'uplink-editorial-title')
+																			: __('Fails AA.', 'uplink-editorial-title')
+															)
+														)
+												)
+												: null,
+											el(
+												'div',
+												{ className: 'uplink-editorial-title__color-actions' },
+												el(
+													Button,
+													{
+														variant: 'secondary',
+														onClick: clearPendingHighlightColor,
+														disabled: activeColorTab === 'textColor'
+															? !pendingTextColor
+															: !pendingBackgroundColor,
+													},
+													__('Clear', 'uplink-editorial-title')
+												),
+												el(
+													Button,
+													{
+														variant: 'primary',
+														onClick: applyPendingHighlightColors,
+													},
+													__('Apply changes', 'uplink-editorial-title')
+												)
+											)
+										)
+									)
+									: null,
+								classPopoverOpen && classAnchor
+									? el(
+										Popover,
+										{
+											anchor: classAnchor,
+											placement: 'bottom-start',
+											offset: 8,
+											shift: true,
+											focusOnMount: 'firstElement',
+											onFocusOutside: () => {},
+											onClose: () => setClassPopoverOpen(false),
+											className: 'uplink-editorial-title__class-popover',
+										},
+										el(
+											'div',
+											{
+												className: 'uplink-editorial-title__class-panel',
+												role: 'dialog',
+												'aria-label': __('Inline CSS class', 'uplink-editorial-title'),
+											},
+											el(Button, {
+												icon: 'no-alt',
+												label: __('Close class editor', 'uplink-editorial-title'),
+												className: 'uplink-editorial-title__class-close',
+												onClick: () => setClassPopoverOpen(false),
+											}),
+											el(
+												'div',
+												{ className: 'uplink-editorial-title__class-body' },
+												el('strong', { className: 'uplink-editorial-title__class-title' }, __('Inline CSS class', 'uplink-editorial-title')),
+												el(TextControl, {
+													label: __('CSS classes', 'uplink-editorial-title'),
+													help: __('Separate multiple class names with spaces.', 'uplink-editorial-title'),
+													value: pendingInlineClass,
+													onChange: (nextClass) => {
+														setClassError('');
+														setPendingInlineClass(nextClass);
+													},
+													autoComplete: 'off',
+													spellCheck: false,
+													__nextHasNoMarginBottom: true,
+												}),
+												classError
+													? el('p', { className: 'uplink-editorial-title__class-error', role: 'alert' }, classError)
+													: null
+											),
+											el(
+												'div',
+												{ className: 'uplink-editorial-title__class-actions' },
+												el(
+													Button,
+													{
+														variant: 'secondary',
+														onClick: () => {
+															setClassError('');
+															setPendingInlineClass('');
+														},
+														disabled: !pendingInlineClass,
+													},
+													__('Clear', 'uplink-editorial-title')
+												),
+												el(
+													Button,
+													{
+														variant: 'primary',
+														onClick: applyPendingInlineClass,
+													},
+													__('Apply changes', 'uplink-editorial-title')
+												)
 											)
 										)
 									)
