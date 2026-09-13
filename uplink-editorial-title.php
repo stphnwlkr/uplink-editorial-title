@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Uplink Editorial Title
  * Description:       Adds an optional editorial display title with safe inline formatting and CSS class assignment to the WordPress block editor.
- * Version:           1.1.0
+ * Version:           1.1.1
  * Requires at least: 7.0
  * Requires PHP:      8.3
  * Author:            Stephen Walker
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 final class Uplink_Editorial_Title {
-	public const VERSION         = '1.1.0';
+	public const VERSION         = '1.1.1';
 	public const META_TITLE      = 'uplink_editorial_title';
 	public const META_CLASS      = 'uplink_editorial_title_class';
 	public const OPTION_SETTINGS = 'uplink_editorial_title_settings';
@@ -75,7 +75,7 @@ final class Uplink_Editorial_Title {
 				'editor_format' => 'uplink-editorial-title/highlight',
 			),
 			'span'   => array(
-				'label'         => __( 'Inline CSS class', 'uplink-editorial-title' ),
+				'label'         => __( 'Inline span', 'uplink-editorial-title' ),
 				'editor_format' => 'uplink-editorial-title/inline-class',
 			),
 			's'      => array(
@@ -462,8 +462,11 @@ final class Uplink_Editorial_Title {
 				);
 			} elseif ( 'span' === $tag ) {
 				$allowed_html[ $tag ] = array(
-					'class'                 => true,
-					'data-uet-inline-class' => true,
+					'class'                  => true,
+					'data-uet-inline-class'  => true,
+					'data-uet-letter-group'  => true,
+					'data-uet-letter-index'  => true,
+					'data-uet-letter-label'  => true,
 				);
 			} else {
 				$allowed_html[ $tag ] = array();
@@ -517,18 +520,45 @@ final class Uplink_Editorial_Title {
 			$sanitized = preg_replace_callback(
 				'/<span\b([^>]*)>/i',
 				static function ( array $matches ): string {
-					$attributes = $matches[1] ?? '';
-					$classes    = '';
+					$attributes   = $matches[1] ?? '';
+					$classes      = '';
+					$letter_group = '';
+					$letter_index = '';
+					$letter_label = '';
 
 					if ( preg_match( '/data-uet-inline-class=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $class_match ) ) {
-						$classes = html_entity_decode( $class_match[1] ?: $class_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+						$classes = html_entity_decode( '' !== $class_match[1] ? $class_match[1] : $class_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 					} elseif ( preg_match( '/class=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $class_match ) ) {
-						$classes = html_entity_decode( $class_match[1] ?: $class_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+						$classes = html_entity_decode( '' !== $class_match[1] ? $class_match[1] : $class_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+					}
+
+					if ( preg_match( '/data-uet-letter-group=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $group_match ) ) {
+						$letter_group = self::sanitize_letter_group_id(
+							html_entity_decode( '' !== $group_match[1] ? $group_match[1] : $group_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' )
+						);
+					}
+					if ( preg_match( '/data-uet-letter-index=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $index_match ) ) {
+						$raw_index = '' !== $index_match[1] ? $index_match[1] : $index_match[2];
+						if ( preg_match( '/^\d{1,4}$/', $raw_index ) ) {
+							$letter_index = (string) absint( $raw_index );
+						}
+					}
+					if ( preg_match( '/data-uet-letter-label=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $label_match ) ) {
+						$letter_label = self::sanitize_letter_label(
+							html_entity_decode( '' !== $label_match[1] ? $label_match[1] : $label_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' )
+						);
+					}
+
+					if ( '' !== $letter_group && '' !== $letter_index ) {
+						return '<span class="uet-letter" data-uet-letter-group="' . esc_attr( $letter_group ) .
+							'" data-uet-letter-index="' . esc_attr( $letter_index ) . '">';
 					}
 
 					$classes = self::sanitize_inline_classes( $classes );
 					return '<span class="uet-inline-class"' .
-						( $classes ? ' data-uet-inline-class="' . esc_attr( $classes ) . '"' : '' ) . '>';
+						( $classes ? ' data-uet-inline-class="' . esc_attr( $classes ) . '"' : '' ) .
+						( $letter_group && $letter_label ? ' data-uet-letter-group="' . esc_attr( $letter_group ) . '"' : '' ) .
+						( $letter_group && $letter_label ? ' data-uet-letter-label="' . esc_attr( $letter_label ) . '"' : '' ) . '>';
 				},
 				$sanitized
 			);
@@ -653,15 +683,29 @@ final class Uplink_Editorial_Title {
 		$rendered = preg_replace_callback(
 			'/<span\b([^>]*)>/i',
 			static function ( array $matches ): string {
-				$attributes = $matches[1] ?? '';
-				$classes    = '';
+				$attributes   = $matches[1] ?? '';
+				$classes      = '';
+				$letter_group = '';
+				$letter_label = '';
+
+				if ( preg_match( '/data-uet-letter-index="\d{1,4}"/i', $attributes ) ) {
+					return '<span aria-hidden="true">';
+				}
 
 				if ( preg_match( '/data-uet-inline-class="([^"]*)"/i', $attributes, $class_match ) ) {
 					$classes = html_entity_decode( $class_match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 				}
+				if ( preg_match( '/data-uet-letter-group="([^"]*)"/i', $attributes, $group_match ) ) {
+					$letter_group = self::sanitize_letter_group_id( html_entity_decode( $group_match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
+				}
+				if ( preg_match( '/data-uet-letter-label="([^"]*)"/i', $attributes, $label_match ) ) {
+					$letter_label = self::sanitize_letter_label( html_entity_decode( $label_match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
+				}
 
 				$classes = self::sanitize_inline_classes( $classes );
-				return $classes ? '<span class="' . esc_attr( $classes ) . '">' : '<span>';
+				return '<span' .
+					( $classes ? ' class="' . esc_attr( $classes ) . '"' : '' ) .
+					( $letter_group && $letter_label ? ' aria-label="' . esc_attr( $letter_label ) . '"' : '' ) . '>';
 			},
 			is_string( $rendered ) ? $rendered : ''
 		);
@@ -678,8 +722,31 @@ final class Uplink_Editorial_Title {
 			return '';
 		}
 
-		$classes = array_diff( preg_split( '/\s+/', $classes ) ?: array(), array( 'uet-inline-class' ) );
+		$classes = array_diff( preg_split( '/\s+/', $classes ) ?: array(), array( 'uet-inline-class', 'uet-letter' ) );
 		return implode( ' ', $classes );
+	}
+
+	/**
+	 * Sanitize the private ID that associates generated letter spans with a parent.
+	 */
+	public static function sanitize_letter_group_id( $value ): string {
+		if ( ! is_string( $value ) ) {
+			return '';
+		}
+
+		return substr( preg_replace( '/[^a-z0-9_-]/i', '', trim( $value ) ) ?: '', 0, 64 );
+	}
+
+	/**
+	 * Sanitize the accessible label stored on a generated letter group.
+	 */
+	public static function sanitize_letter_label( $value ): string {
+		if ( ! is_string( $value ) ) {
+			return '';
+		}
+
+		$value = sanitize_text_field( $value );
+		return function_exists( 'mb_substr' ) ? mb_substr( $value, 0, 500 ) : substr( $value, 0, 500 );
 	}
 
 	/**

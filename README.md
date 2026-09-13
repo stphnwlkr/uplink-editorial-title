@@ -1,6 +1,6 @@
 # Uplink Editorial Title
 
-**Version:** 1.1.0
+**Version:** 1.1.1
 **Requires WordPress:** 7.0+
 **Tested through:** 7.1
 **Requires PHP:** 8.3+
@@ -74,6 +74,8 @@ Select text and open Highlight to choose separate Text and Background colors fro
 
 The CSS color value field also accepts validated advanced values such as `var(--primary)` and `color-mix(in oklch, yellow 50%, transparent)`.
 
-## Inline CSS classes
+## Inline spans
 
-Select title text and choose Inline CSS class to wrap it in a `<span>`. Enter one or more space-separated class names. The plugin sanitizes each class and outputs only those classes on the front end, so border, radius, padding, and other presentation remain in the site stylesheet.
+Select title text and choose Inline span to wrap it in a `<span>`. Classes are optional. The editor marks span boundaries and reports the current nesting level. When the selection is already inside a span, you can update or remove that span, or add another inner span. The plugin sanitizes each class and outputs only those classes on the front end, so border, radius, padding, and other presentation remain in the site stylesheet.
+
+For character animations, enter a parent class and choose Split letters. The plugin keeps spaces as text nodes and wraps each Unicode grapheme in its own span. The generated parent supplies the complete text as an accessible label, while character spans are hidden from assistive technology. Choose Unwrap letters to restore the original text and formatting.

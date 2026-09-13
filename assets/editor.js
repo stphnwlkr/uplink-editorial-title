@@ -32,8 +32,8 @@
 		applyFormat: applyRichTextFormat,
 		create,
 		getActiveFormat,
+		getActiveFormats,
 		registerFormatType,
-		removeFormat,
 		toHTMLString,
 		toggleFormat,
 	} = wp.richText;
@@ -42,10 +42,15 @@
 	const CLASS_META = 'uplink_editorial_title_class';
 	const HIGHLIGHT_FORMAT = 'uplink-editorial-title/highlight';
 	const INLINE_CLASS_FORMAT = 'uplink-editorial-title/inline-class';
+	const LETTER_FORMAT = 'uplink-editorial-title/letter';
 	const HIGHLIGHT_ATTRIBUTE = 'data-uet-mark-color';
 	const HIGHLIGHT_TEXT_ATTRIBUTE = 'data-uet-mark-text-color';
 	const INLINE_CLASS_ATTRIBUTE = 'data-uet-inline-class';
 	const INLINE_CLASS_MARKER = 'uet-inline-class';
+	const LETTER_GROUP_ATTRIBUTE = 'data-uet-letter-group';
+	const LETTER_INDEX_ATTRIBUTE = 'data-uet-letter-index';
+	const LETTER_LABEL_ATTRIBUTE = 'data-uet-letter-label';
+	const LETTER_MARKER = 'uet-letter';
 	const EDITOR_SETTINGS = window.uplinkEditorialTitleSettings || {};
 	const ALL_FORMATS = [
 		'core/bold',
@@ -68,6 +73,9 @@
 	const ALLOWED_FORMATS = Array.isArray(EDITOR_SETTINGS.allowedFormats)
 		? ALL_FORMATS.filter((format) => EDITOR_SETTINGS.allowedFormats.includes(format))
 		: ALL_FORMATS;
+	const RICH_TEXT_ALLOWED_FORMATS = ALLOWED_FORMATS.includes(INLINE_CLASS_FORMAT)
+		? [...ALLOWED_FORMATS, LETTER_FORMAT]
+		: ALLOWED_FORMATS;
 	const ALLOWED_TAGS = ALLOWED_FORMATS.map((format) => FORMAT_TAGS[format]);
 	const ENABLED_POST_TYPES = Array.isArray(EDITOR_SETTINGS.enabledPostTypes)
 		? EDITOR_SETTINGS.enabledPostTypes
@@ -84,7 +92,7 @@
 		{ type: 'core/bold', label: __('Bold', 'uplink-editorial-title'), glyph: 'B', className: 'is-bold' },
 		{ type: 'core/italic', label: __('Italic', 'uplink-editorial-title'), glyph: 'I', className: 'is-italic' },
 		{ type: HIGHLIGHT_FORMAT, label: __('Highlight', 'uplink-editorial-title'), glyph: 'A', className: 'is-mark' },
-		{ type: INLINE_CLASS_FORMAT, label: __('Inline CSS class', 'uplink-editorial-title'), glyph: '<>', className: 'is-inline-class' },
+		{ type: INLINE_CLASS_FORMAT, label: __('Inline span', 'uplink-editorial-title'), glyph: '<>', className: 'is-inline-class' },
 		{ type: 'core/strikethrough', label: __('Strikethrough', 'uplink-editorial-title'), glyph: 'S', className: 'is-strike' },
 		{ type: 'core/subscript', label: __('Subscript', 'uplink-editorial-title'), glyph: 'X₂', className: 'is-script' },
 		{ type: 'core/superscript', label: __('Superscript', 'uplink-editorial-title'), glyph: 'X²', className: 'is-script' },
@@ -115,11 +123,29 @@
 
 		if (!existingInlineClass) {
 			registerFormatType(INLINE_CLASS_FORMAT, {
-				title: __('Inline CSS class', 'uplink-editorial-title'),
+				title: __('Inline span', 'uplink-editorial-title'),
 				tagName: 'span',
 				className: INLINE_CLASS_MARKER,
 				attributes: {
 					inlineClass: INLINE_CLASS_ATTRIBUTE,
+					letterGroup: LETTER_GROUP_ATTRIBUTE,
+					letterLabel: LETTER_LABEL_ATTRIBUTE,
+				},
+			});
+		}
+
+		const existingLetter = richTextStore && typeof richTextStore.getFormatType === 'function'
+			? richTextStore.getFormatType(LETTER_FORMAT)
+			: null;
+
+		if (!existingLetter) {
+			registerFormatType(LETTER_FORMAT, {
+				title: __('Animated letter', 'uplink-editorial-title'),
+				tagName: 'span',
+				className: LETTER_MARKER,
+				attributes: {
+					letterGroup: LETTER_GROUP_ATTRIBUTE,
+					letterIndex: LETTER_INDEX_ATTRIBUTE,
 				},
 			});
 		}
@@ -154,10 +180,124 @@
 
 		const storedClasses = element.getAttribute(INLINE_CLASS_ATTRIBUTE) || '';
 		const visibleClasses = Array.from(element.classList)
-			.filter((className) => className !== INLINE_CLASS_MARKER)
+			.filter((className) => className !== INLINE_CLASS_MARKER && className !== LETTER_MARKER)
 			.join(' ');
 
 		return sanitizeClassList(storedClasses || visibleClasses);
+	}
+
+	function sanitizeLetterGroupId(value) {
+		return typeof value === 'string'
+			? value.trim().replace(/[^a-z0-9_-]/gi, '').slice(0, 64)
+			: '';
+	}
+
+	function createLetterGroupId() {
+		return 'uet-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9);
+	}
+
+	function sanitizeLetterLabel(value) {
+		return typeof value === 'string'
+			? value.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 500)
+			: '';
+	}
+
+	function splitGraphemes(value) {
+		if (window.Intl && typeof window.Intl.Segmenter === 'function') {
+			const segmenter = new window.Intl.Segmenter(undefined, { granularity: 'grapheme' });
+			return Array.from(segmenter.segment(value), ({ segment, index }) => ({ segment, index }));
+		}
+
+		const segments = [];
+		let index = 0;
+		Array.from(value).forEach((segment) => {
+			segments.push({ segment, index });
+			index += segment.length;
+		});
+		return segments;
+	}
+
+	function wrapRichTextFormat(value, format, start = value.start, end = value.end) {
+		const newFormats = value.formats.slice();
+		let position = Infinity;
+
+		for (let index = start; index < end; index += 1) {
+			newFormats[index] = newFormats[index] ? newFormats[index].slice() : [];
+			position = Math.min(position, newFormats[index].length);
+		}
+
+		if (!Number.isFinite(position)) {
+			return value;
+		}
+
+		for (let index = start; index < end; index += 1) {
+			newFormats[index].splice(position, 0, format);
+		}
+
+		return {
+			...value,
+			formats: newFormats,
+			activeFormats: [...(value.activeFormats || []), format],
+		};
+	}
+
+	function removeLetterGroup(value, groupId) {
+		const newFormats = value.formats.map((formatsAtIndex) => {
+			if (!formatsAtIndex) {
+				return formatsAtIndex;
+			}
+
+			return formatsAtIndex.filter((format) => {
+				if (format.type !== INLINE_CLASS_FORMAT && format.type !== LETTER_FORMAT) {
+					return true;
+				}
+
+				return sanitizeLetterGroupId(format.attributes && format.attributes.letterGroup) !== groupId;
+			});
+		});
+
+		return {
+			...value,
+			formats: newFormats,
+			activeFormats: [],
+		};
+	}
+
+	function changeNestedRichTextFormat(value, formatType, depth, replacement) {
+		const newFormats = value.formats.slice();
+
+		for (let index = value.start; index < value.end; index += 1) {
+			if (!newFormats[index]) {
+				continue;
+			}
+
+			const formatsAtIndex = newFormats[index].slice();
+			const matchingIndexes = [];
+			formatsAtIndex.forEach((format, formatIndex) => {
+				if (format.type === formatType) {
+					matchingIndexes.push(formatIndex);
+				}
+			});
+
+			const targetIndex = matchingIndexes[depth];
+			if (typeof targetIndex === 'undefined') {
+				continue;
+			}
+
+			if (replacement) {
+				formatsAtIndex[targetIndex] = replacement;
+			} else {
+				formatsAtIndex.splice(targetIndex, 1);
+			}
+
+			newFormats[index] = formatsAtIndex;
+		}
+
+		return {
+			...value,
+			formats: newFormats,
+			activeFormats: [],
+		};
 	}
 
 	function isSafeColorValue(value) {
@@ -428,12 +568,27 @@
 			}
 
 			if (allowed && node.tagName === 'SPAN') {
-				const classes = getInlineClasses(node);
-				nextDestination.className = includeStyles && classes
-					? INLINE_CLASS_MARKER + ' ' + classes
-					: INLINE_CLASS_MARKER;
-				if (classes) {
-					nextDestination.setAttribute(INLINE_CLASS_ATTRIBUTE, classes);
+				const groupId = sanitizeLetterGroupId(node.getAttribute(LETTER_GROUP_ATTRIBUTE) || '');
+				const letterIndex = node.getAttribute(LETTER_INDEX_ATTRIBUTE) || '';
+				const isLetter = node.classList.contains(LETTER_MARKER) || /^\d+$/.test(letterIndex);
+
+				if (isLetter && groupId && /^\d+$/.test(letterIndex)) {
+					nextDestination.className = LETTER_MARKER;
+					nextDestination.setAttribute(LETTER_GROUP_ATTRIBUTE, groupId);
+					nextDestination.setAttribute(LETTER_INDEX_ATTRIBUTE, letterIndex);
+				} else {
+					const classes = getInlineClasses(node);
+					const letterLabel = sanitizeLetterLabel(node.getAttribute(LETTER_LABEL_ATTRIBUTE) || '');
+					nextDestination.className = includeStyles && classes
+						? INLINE_CLASS_MARKER + ' ' + classes
+						: INLINE_CLASS_MARKER;
+					if (classes) {
+						nextDestination.setAttribute(INLINE_CLASS_ATTRIBUTE, classes);
+					}
+					if (groupId && letterLabel) {
+						nextDestination.setAttribute(LETTER_GROUP_ATTRIBUTE, groupId);
+						nextDestination.setAttribute(LETTER_LABEL_ATTRIBUTE, letterLabel);
+					}
 				}
 			}
 
@@ -526,6 +681,9 @@
 			highlightBackgroundColor: '',
 			highlightTextColor: '',
 			inlineClass: '',
+			inlineSpanDepth: 0,
+			letterGroupId: '',
+			letterLabel: '',
 		});
 		const editorShellRef = useRef(null);
 		const savedRangeRef = useRef(null);
@@ -592,10 +750,19 @@
 					highlightBackgroundColor = colors.backgroundColor;
 					highlightTextColor = colors.textColor;
 				}
-				if (control.type === INLINE_CLASS_FORMAT && format && format.attributes) {
-					inlineClass = sanitizeClassList(format.attributes.inlineClass || '');
-				}
 			});
+
+			const activeInlineFormats = getActiveFormats(richValue)
+				.filter((format) => format.type === INLINE_CLASS_FORMAT);
+			const activeInlineFormat = activeInlineFormats[activeInlineFormats.length - 1];
+			let letterGroupId = '';
+			let letterLabel = '';
+			if (activeInlineFormat && activeInlineFormat.attributes) {
+				inlineClass = sanitizeClassList(activeInlineFormat.attributes.inlineClass || '');
+				letterGroupId = sanitizeLetterGroupId(activeInlineFormat.attributes.letterGroup || '');
+				letterLabel = sanitizeLetterLabel(activeInlineFormat.attributes.letterLabel || '');
+			}
+			active[INLINE_CLASS_FORMAT] = activeInlineFormats.length > 0;
 
 			setSelectionState({
 				hasSelection: !range.collapsed,
@@ -603,6 +770,9 @@
 				highlightBackgroundColor,
 				highlightTextColor,
 				inlineClass,
+				inlineSpanDepth: activeInlineFormats.length,
+				letterGroupId,
+				letterLabel,
 			});
 		}
 
@@ -705,12 +875,12 @@
 			setClassPopoverOpen(true);
 		}
 
-		function applyPendingInlineClass() {
+		function commitInlineSpan(action) {
 			const editorElement = getEditorElement();
 			const range = savedRangeRef.current;
 			const classes = pendingInlineClass.trim();
 
-			if (!isValidClassList(classes)) {
+			if (action !== 'remove' && !isValidClassList(classes)) {
 				setClassError(__('Use letters, numbers, hyphens, and underscores only.', 'uplink-editorial-title'));
 				return;
 			}
@@ -724,15 +894,144 @@
 
 			try {
 				const richValue = create({ element: editorElement, range });
-				if (!classes) {
-					commitRichValue(removeFormat(richValue, INLINE_CLASS_FORMAT));
+				const attributes = {};
+				if (classes) {
+					attributes.inlineClass = sanitizeClassList(classes);
+				}
+				if (selectionState.letterGroupId) {
+					attributes.letterGroup = selectionState.letterGroupId;
+					attributes.letterLabel = selectionState.letterLabel;
+				}
+				const format = {
+					type: INLINE_CLASS_FORMAT,
+					...(Object.keys(attributes).length ? { attributes } : {}),
+				};
+				let nextValue;
+
+				if (action === 'remove') {
+					nextValue = changeNestedRichTextFormat(
+						richValue,
+						INLINE_CLASS_FORMAT,
+						selectionState.inlineSpanDepth - 1,
+						null
+					);
+				} else if (action === 'nest' || !selectionState.inlineSpanDepth) {
+					nextValue = wrapRichTextFormat(richValue, format);
+				} else {
+					nextValue = changeNestedRichTextFormat(
+						richValue,
+						INLINE_CLASS_FORMAT,
+						selectionState.inlineSpanDepth - 1,
+						format
+					);
+				}
+
+				commitRichValue(nextValue);
+			} catch (error) {
+				return;
+			}
+		}
+
+		function applyPendingInlineClass() {
+			commitInlineSpan('apply');
+		}
+
+		function addNestedInlineSpan() {
+			commitInlineSpan('nest');
+		}
+
+		function removeCurrentInlineSpan() {
+			commitInlineSpan('remove');
+		}
+
+		function splitSelectionIntoLetters() {
+			const editorElement = getEditorElement();
+			const range = savedRangeRef.current;
+			const classes = pendingInlineClass.trim();
+
+			if (!classes) {
+				setClassError(__('Enter at least one class for the letter group.', 'uplink-editorial-title'));
+				return;
+			}
+			if (!isValidClassList(classes)) {
+				setClassError(__('Use letters, numbers, hyphens, and underscores only.', 'uplink-editorial-title'));
+				return;
+			}
+			if (!editorElement || !range || range.collapsed || !editorElement.contains(range.commonAncestorContainer)) {
+				return;
+			}
+
+			try {
+				const richValue = create({ element: editorElement, range });
+				const detectedInlineDepth = getActiveFormats(richValue)
+					.filter((format) => format.type === INLINE_CLASS_FORMAT).length;
+				const activeInlineDepth = Math.max(selectionState.inlineSpanDepth, detectedInlineDepth);
+				const selectedText = richValue.text.slice(richValue.start, richValue.end);
+				const graphemes = splitGraphemes(selectedText)
+					.filter(({ segment }) => !/^\s+$/u.test(segment));
+
+				if (!graphemes.length) {
+					setClassError(__('Select at least one visible character.', 'uplink-editorial-title'));
 					return;
 				}
 
-				commitRichValue(applyRichTextFormat(richValue, {
+				const groupId = createLetterGroupId();
+				const parentFormat = {
 					type: INLINE_CLASS_FORMAT,
-					attributes: { inlineClass: sanitizeClassList(classes) },
-				}));
+					attributes: {
+						inlineClass: sanitizeClassList(classes),
+						letterGroup: groupId,
+						letterLabel: sanitizeLetterLabel(selectedText),
+					},
+				};
+				let nextValue = richValue;
+				if (activeInlineDepth) {
+					nextValue = changeNestedRichTextFormat(
+						richValue,
+						INLINE_CLASS_FORMAT,
+						activeInlineDepth - 1,
+						null
+					);
+				}
+				nextValue = wrapRichTextFormat(nextValue, parentFormat);
+
+				graphemes.forEach(({ segment, index }, letterIndex) => {
+					nextValue = wrapRichTextFormat(
+						nextValue,
+						{
+							type: LETTER_FORMAT,
+							attributes: {
+								letterGroup: groupId,
+								letterIndex: String(letterIndex),
+							},
+						},
+						richValue.start + index,
+						richValue.start + index + segment.length
+					);
+				});
+
+				setClassError('');
+				setClassPopoverOpen(false);
+				commitRichValue(nextValue);
+			} catch (error) {
+				return;
+			}
+		}
+
+		function unwrapLetterGroup() {
+			const editorElement = getEditorElement();
+			const range = savedRangeRef.current;
+			const groupId = selectionState.letterGroupId;
+
+			if (!groupId || !editorElement || !range || !editorElement.contains(range.commonAncestorContainer)) {
+				return;
+			}
+
+			try {
+				const richValue = create({ element: editorElement, range });
+				setClassError('');
+				setClassPopoverOpen(false);
+				commitRichValue(removeLetterGroup(richValue, groupId));
 			} catch (error) {
 				return;
 			}
@@ -838,6 +1137,9 @@
 				highlightBackgroundColor: '',
 				highlightTextColor: '',
 				inlineClass: '',
+				inlineSpanDepth: 0,
+				letterGroupId: '',
+				letterLabel: '',
 			});
 		}
 
@@ -1131,7 +1433,7 @@
 											{
 												className: 'uplink-editorial-title__class-panel',
 												role: 'dialog',
-												'aria-label': __('Inline CSS class', 'uplink-editorial-title'),
+												'aria-label': __('Inline span', 'uplink-editorial-title'),
 											},
 											el(Button, {
 												icon: 'no-alt',
@@ -1142,10 +1444,10 @@
 											el(
 												'div',
 												{ className: 'uplink-editorial-title__class-body' },
-												el('strong', { className: 'uplink-editorial-title__class-title' }, __('Inline CSS class', 'uplink-editorial-title')),
+												el('strong', { className: 'uplink-editorial-title__class-title' }, __('Inline span', 'uplink-editorial-title')),
 												el(TextControl, {
-													label: __('CSS classes', 'uplink-editorial-title'),
-													help: __('Separate multiple class names with spaces.', 'uplink-editorial-title'),
+													label: __('CSS classes (optional)', 'uplink-editorial-title'),
+													help: __('Leave empty for a plain span. Letter splitting requires a parent class.', 'uplink-editorial-title'),
 													value: pendingInlineClass,
 													onChange: (nextClass) => {
 														setClassError('');
@@ -1155,6 +1457,15 @@
 													spellCheck: false,
 													__nextHasNoMarginBottom: true,
 												}),
+												el(
+													'p',
+													{ className: 'uplink-editorial-title__span-status' },
+													selectionState.inlineSpanDepth
+														? __('Current span', 'uplink-editorial-title') + ': ' +
+															(selectionState.inlineClass || __('plain', 'uplink-editorial-title')) + ' · ' +
+															__('level', 'uplink-editorial-title') + ' ' + selectionState.inlineSpanDepth
+														: __('The selection is not inside a span.', 'uplink-editorial-title')
+												),
 												classError
 													? el('p', { className: 'uplink-editorial-title__class-error', role: 'alert' }, classError)
 													: null
@@ -1162,6 +1473,27 @@
 											el(
 												'div',
 												{ className: 'uplink-editorial-title__class-actions' },
+												selectionState.letterGroupId
+													? el(
+														Button,
+														{
+															variant: 'secondary',
+															isDestructive: true,
+															onClick: unwrapLetterGroup,
+														},
+														__('Unwrap letters', 'uplink-editorial-title')
+													)
+													: selectionState.inlineSpanDepth
+														? el(
+															Button,
+															{
+																variant: 'secondary',
+																isDestructive: true,
+																onClick: removeCurrentInlineSpan,
+															},
+															__('Remove span', 'uplink-editorial-title')
+														)
+														: null,
 												el(
 													Button,
 													{
@@ -1174,13 +1506,35 @@
 													},
 													__('Clear', 'uplink-editorial-title')
 												),
+												selectionState.inlineSpanDepth && !selectionState.letterGroupId
+													? el(
+														Button,
+														{
+															variant: 'secondary',
+															onClick: addNestedInlineSpan,
+														},
+															__('Add inner span', 'uplink-editorial-title')
+													)
+													: null,
+												!selectionState.letterGroupId && !selectionState.inlineSpanDepth
+													? el(
+														Button,
+														{
+															variant: 'secondary',
+															onClick: splitSelectionIntoLetters,
+														},
+														__('Split letters', 'uplink-editorial-title')
+													)
+													: null,
 												el(
 													Button,
 													{
 														variant: 'primary',
 														onClick: applyPendingInlineClass,
 													},
-													__('Apply changes', 'uplink-editorial-title')
+													selectionState.inlineSpanDepth
+														? __('Apply changes', 'uplink-editorial-title')
+														: __('Wrap selection', 'uplink-editorial-title')
 												)
 											)
 										)
@@ -1199,7 +1553,7 @@
 										onKeyUp: captureSelection,
 										onSelect: captureSelection,
 										onFocus: captureSelection,
-										allowedFormats: ALLOWED_FORMATS,
+										allowedFormats: RICH_TEXT_ALLOWED_FORMATS,
 										placeholder: state.canonicalTitle || __('Add editorial title…', 'uplink-editorial-title'),
 										'aria-label': __('Editorial display title', 'uplink-editorial-title'),
 									})
