@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Uplink Editorial Title
  * Description:       Adds an optional editorial display title with safe inline formatting and CSS class assignment to the WordPress block editor.
- * Version:           1.0.1
+ * Version:           1.1.0
  * Requires at least: 7.0
  * Requires PHP:      8.3
  * Author:            Stephen Walker
@@ -17,10 +17,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 final class Uplink_Editorial_Title {
-	public const VERSION         = '1.0.1';
+	public const VERSION         = '1.1.0';
 	public const META_TITLE      = 'uplink_editorial_title';
 	public const META_CLASS      = 'uplink_editorial_title_class';
 	public const OPTION_SETTINGS = 'uplink_editorial_title_settings';
+	public const OPTION_VERSION  = 'uplink_editorial_title_version';
 	private static string $settings_page_hook = '';
 
 	/**
@@ -37,6 +38,7 @@ final class Uplink_Editorial_Title {
 	 * Initialize plugin hooks.
 	 */
 	public static function init(): void {
+		add_action( 'init', array( __CLASS__, 'maybe_upgrade_settings' ), 10 );
 		add_action( 'init', array( __CLASS__, 'register_meta' ), 20 );
 		add_action( 'enqueue_block_editor_assets', array( __CLASS__, 'enqueue_editor_assets' ) );
 		add_action( 'init', array( __CLASS__, 'register_editorial_title_block' ), 30 );
@@ -72,6 +74,10 @@ final class Uplink_Editorial_Title {
 				'label'         => __( 'Highlight', 'uplink-editorial-title' ),
 				'editor_format' => 'uplink-editorial-title/highlight',
 			),
+			'span'   => array(
+				'label'         => __( 'Inline CSS class', 'uplink-editorial-title' ),
+				'editor_format' => 'uplink-editorial-title/inline-class',
+			),
 			's'      => array(
 				'label'         => __( 'Strikethrough', 'uplink-editorial-title' ),
 				'editor_format' => 'core/strikethrough',
@@ -85,6 +91,31 @@ final class Uplink_Editorial_Title {
 				'editor_format' => 'core/superscript',
 			),
 		);
+	}
+
+	/**
+	 * Enable newly introduced formats once when an existing site upgrades.
+	 */
+	public static function maybe_upgrade_settings(): void {
+		$installed_version = (string) get_option( self::OPTION_VERSION, '' );
+
+		if ( version_compare( $installed_version, self::VERSION, '>=' ) ) {
+			return;
+		}
+
+		if ( version_compare( $installed_version, '1.0.4', '<' ) ) {
+			$stored = get_option( self::OPTION_SETTINGS, false );
+			if ( is_array( $stored ) ) {
+				$formats = is_array( $stored['formats'] ?? null ) ? $stored['formats'] : array();
+				if ( ! in_array( 'span', $formats, true ) ) {
+					$formats[]         = 'span';
+					$stored['formats'] = $formats;
+					update_option( self::OPTION_SETTINGS, $stored );
+				}
+			}
+		}
+
+		update_option( self::OPTION_VERSION, self::VERSION );
 	}
 
 	/**
@@ -424,12 +455,19 @@ final class Uplink_Editorial_Title {
 		$allowed_html    = array();
 
 		foreach ( $enabled_formats as $tag ) {
-			$allowed_html[ $tag ] = 'mark' === $tag
-				? array(
+			if ( 'mark' === $tag ) {
+				$allowed_html[ $tag ] = array(
 					'data-uet-mark-color'      => true,
 					'data-uet-mark-text-color' => true,
-				)
-				: array();
+				);
+			} elseif ( 'span' === $tag ) {
+				$allowed_html[ $tag ] = array(
+					'class'                 => true,
+					'data-uet-inline-class' => true,
+				);
+			} else {
+				$allowed_html[ $tag ] = array();
+			}
 		}
 
 		$sanitized = wp_kses(
@@ -469,6 +507,28 @@ final class Uplink_Editorial_Title {
 				}
 
 				return '<mark' . $normalized_attributes . '>';
+				},
+				$sanitized
+			);
+		}
+
+		// Keep a private marker for RichText while storing user classes as data.
+		if ( in_array( 'span', $enabled_formats, true ) ) {
+			$sanitized = preg_replace_callback(
+				'/<span\b([^>]*)>/i',
+				static function ( array $matches ): string {
+					$attributes = $matches[1] ?? '';
+					$classes    = '';
+
+					if ( preg_match( '/data-uet-inline-class=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $class_match ) ) {
+						$classes = html_entity_decode( $class_match[1] ?: $class_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+					} elseif ( preg_match( '/class=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $class_match ) ) {
+						$classes = html_entity_decode( $class_match[1] ?: $class_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+					}
+
+					$classes = self::sanitize_inline_classes( $classes );
+					return '<span class="uet-inline-class"' .
+						( $classes ? ' data-uet-inline-class="' . esc_attr( $classes ) . '"' : '' ) . '>';
 				},
 				$sanitized
 			);
@@ -590,7 +650,36 @@ final class Uplink_Editorial_Title {
 			$value
 		);
 
+		$rendered = preg_replace_callback(
+			'/<span\b([^>]*)>/i',
+			static function ( array $matches ): string {
+				$attributes = $matches[1] ?? '';
+				$classes    = '';
+
+				if ( preg_match( '/data-uet-inline-class="([^"]*)"/i', $attributes, $class_match ) ) {
+					$classes = html_entity_decode( $class_match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+				}
+
+				$classes = self::sanitize_inline_classes( $classes );
+				return $classes ? '<span class="' . esc_attr( $classes ) . '">' : '<span>';
+			},
+			is_string( $rendered ) ? $rendered : ''
+		);
+
 		return is_string( $rendered ) ? $rendered : '';
+	}
+
+	/**
+	 * Sanitize inline span classes and remove the editor-only marker.
+	 */
+	public static function sanitize_inline_classes( $value ): string {
+		$classes = self::sanitize_classes( $value );
+		if ( '' === $classes ) {
+			return '';
+		}
+
+		$classes = array_diff( preg_split( '/\s+/', $classes ) ?: array(), array( 'uet-inline-class' ) );
+		return implode( ' ', $classes );
 	}
 
 	/**
