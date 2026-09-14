@@ -4,7 +4,7 @@ Tags: editorial, title, gutenberg, block editor, dynamic data
 Requires at least: 7.0
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 1.1.1
+Stable tag: 1.1.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -107,6 +107,9 @@ The plugin adds these tags to the Post dynamic-data group:
 Editorial title markup is sanitized against the administrator-selected strict HTML allowlist. Highlight text and background colors are stored as validated data and rendered only as `color` and `background-color` values. CSS class values are sanitized individually. Settings require administrator access, and meta writes require permission to edit the target post.
 
 == Changelog ==
+
+= 1.1.2 =
+* Prevents warnings when an editorial title contains an empty quoted inline-format attribute.
 
 = 1.1.1 =
 * Allows plain spans without classes and nested spans in editorial titles.

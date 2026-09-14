@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Uplink Editorial Title
  * Description:       Adds an optional editorial display title with safe inline formatting and CSS class assignment to the WordPress block editor.
- * Version:           1.1.1
+ * Version:           1.1.2
  * Requires at least: 7.0
  * Requires PHP:      8.3
  * Author:            Stephen Walker
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 final class Uplink_Editorial_Title {
-	public const VERSION         = '1.1.1';
+	public const VERSION         = '1.1.2';
 	public const META_TITLE      = 'uplink_editorial_title';
 	public const META_CLASS      = 'uplink_editorial_title_class';
 	public const OPTION_SETTINGS = 'uplink_editorial_title_settings';
@@ -488,12 +488,12 @@ final class Uplink_Editorial_Title {
 				$text_color       = '';
 
 				if ( preg_match( '/data-uet-mark-color=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $color_match ) ) {
-					$raw_color        = html_entity_decode( $color_match[1] ?: $color_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+					$raw_color        = html_entity_decode( self::matched_attribute_value( $color_match ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 					$background_color = self::sanitize_highlight_color( $raw_color );
 				}
 
 				if ( preg_match( '/data-uet-mark-text-color=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $color_match ) ) {
-					$raw_color  = html_entity_decode( $color_match[1] ?: $color_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+					$raw_color  = html_entity_decode( self::matched_attribute_value( $color_match ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 					$text_color = self::sanitize_highlight_color( $raw_color );
 				}
 
@@ -527,25 +527,25 @@ final class Uplink_Editorial_Title {
 					$letter_label = '';
 
 					if ( preg_match( '/data-uet-inline-class=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $class_match ) ) {
-						$classes = html_entity_decode( '' !== $class_match[1] ? $class_match[1] : $class_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+						$classes = html_entity_decode( self::matched_attribute_value( $class_match ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 					} elseif ( preg_match( '/class=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $class_match ) ) {
-						$classes = html_entity_decode( '' !== $class_match[1] ? $class_match[1] : $class_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+						$classes = html_entity_decode( self::matched_attribute_value( $class_match ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 					}
 
 					if ( preg_match( '/data-uet-letter-group=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $group_match ) ) {
 						$letter_group = self::sanitize_letter_group_id(
-							html_entity_decode( '' !== $group_match[1] ? $group_match[1] : $group_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' )
+							html_entity_decode( self::matched_attribute_value( $group_match ), ENT_QUOTES | ENT_HTML5, 'UTF-8' )
 						);
 					}
 					if ( preg_match( '/data-uet-letter-index=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $index_match ) ) {
-						$raw_index = '' !== $index_match[1] ? $index_match[1] : $index_match[2];
+						$raw_index = self::matched_attribute_value( $index_match );
 						if ( preg_match( '/^\d{1,4}$/', $raw_index ) ) {
 							$letter_index = (string) absint( $raw_index );
 						}
 					}
 					if ( preg_match( '/data-uet-letter-label=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $label_match ) ) {
 						$letter_label = self::sanitize_letter_label(
-							html_entity_decode( '' !== $label_match[1] ? $label_match[1] : $label_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' )
+							html_entity_decode( self::matched_attribute_value( $label_match ), ENT_QUOTES | ENT_HTML5, 'UTF-8' )
 						);
 					}
 
@@ -565,6 +565,17 @@ final class Uplink_Editorial_Title {
 		}
 
 		return trim( is_string( $sanitized ) ? $sanitized : '' );
+	}
+
+	/**
+	 * Return the value captured from a double- or single-quoted attribute.
+	 */
+	private static function matched_attribute_value( array $matches ): string {
+		if ( isset( $matches[1] ) && '' !== $matches[1] ) {
+			return $matches[1];
+		}
+
+		return isset( $matches[2] ) ? $matches[2] : '';
 	}
 
 	/**
