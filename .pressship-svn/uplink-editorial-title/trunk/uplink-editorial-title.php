@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Uplink Editorial Title
  * Description:       Adds an optional editorial display title with safe inline formatting and CSS class assignment to the WordPress block editor.
- * Version:           1.0.1
+ * Version:           1.1.2
  * Requires at least: 7.0
  * Requires PHP:      8.3
  * Author:            Stephen Walker
@@ -17,10 +17,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 final class Uplink_Editorial_Title {
-	public const VERSION         = '1.0.1';
+	public const VERSION         = '1.1.2';
 	public const META_TITLE      = 'uplink_editorial_title';
 	public const META_CLASS      = 'uplink_editorial_title_class';
 	public const OPTION_SETTINGS = 'uplink_editorial_title_settings';
+	public const OPTION_VERSION  = 'uplink_editorial_title_version';
 	private static string $settings_page_hook = '';
 
 	/**
@@ -37,6 +38,7 @@ final class Uplink_Editorial_Title {
 	 * Initialize plugin hooks.
 	 */
 	public static function init(): void {
+		add_action( 'init', array( __CLASS__, 'maybe_upgrade_settings' ), 10 );
 		add_action( 'init', array( __CLASS__, 'register_meta' ), 20 );
 		add_action( 'enqueue_block_editor_assets', array( __CLASS__, 'enqueue_editor_assets' ) );
 		add_action( 'init', array( __CLASS__, 'register_editorial_title_block' ), 30 );
@@ -72,6 +74,10 @@ final class Uplink_Editorial_Title {
 				'label'         => __( 'Highlight', 'uplink-editorial-title' ),
 				'editor_format' => 'uplink-editorial-title/highlight',
 			),
+			'span'   => array(
+				'label'         => __( 'Inline span', 'uplink-editorial-title' ),
+				'editor_format' => 'uplink-editorial-title/inline-class',
+			),
 			's'      => array(
 				'label'         => __( 'Strikethrough', 'uplink-editorial-title' ),
 				'editor_format' => 'core/strikethrough',
@@ -85,6 +91,31 @@ final class Uplink_Editorial_Title {
 				'editor_format' => 'core/superscript',
 			),
 		);
+	}
+
+	/**
+	 * Enable newly introduced formats once when an existing site upgrades.
+	 */
+	public static function maybe_upgrade_settings(): void {
+		$installed_version = (string) get_option( self::OPTION_VERSION, '' );
+
+		if ( version_compare( $installed_version, self::VERSION, '>=' ) ) {
+			return;
+		}
+
+		if ( version_compare( $installed_version, '1.0.4', '<' ) ) {
+			$stored = get_option( self::OPTION_SETTINGS, false );
+			if ( is_array( $stored ) ) {
+				$formats = is_array( $stored['formats'] ?? null ) ? $stored['formats'] : array();
+				if ( ! in_array( 'span', $formats, true ) ) {
+					$formats[]         = 'span';
+					$stored['formats'] = $formats;
+					update_option( self::OPTION_SETTINGS, $stored );
+				}
+			}
+		}
+
+		update_option( self::OPTION_VERSION, self::VERSION );
 	}
 
 	/**
@@ -424,12 +455,22 @@ final class Uplink_Editorial_Title {
 		$allowed_html    = array();
 
 		foreach ( $enabled_formats as $tag ) {
-			$allowed_html[ $tag ] = 'mark' === $tag
-				? array(
+			if ( 'mark' === $tag ) {
+				$allowed_html[ $tag ] = array(
 					'data-uet-mark-color'      => true,
 					'data-uet-mark-text-color' => true,
-				)
-				: array();
+				);
+			} elseif ( 'span' === $tag ) {
+				$allowed_html[ $tag ] = array(
+					'class'                  => true,
+					'data-uet-inline-class'  => true,
+					'data-uet-letter-group'  => true,
+					'data-uet-letter-index'  => true,
+					'data-uet-letter-label'  => true,
+				);
+			} else {
+				$allowed_html[ $tag ] = array();
+			}
 		}
 
 		$sanitized = wp_kses(
@@ -447,12 +488,12 @@ final class Uplink_Editorial_Title {
 				$text_color       = '';
 
 				if ( preg_match( '/data-uet-mark-color=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $color_match ) ) {
-					$raw_color        = html_entity_decode( $color_match[1] ?: $color_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+					$raw_color        = html_entity_decode( self::matched_attribute_value( $color_match ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 					$background_color = self::sanitize_highlight_color( $raw_color );
 				}
 
 				if ( preg_match( '/data-uet-mark-text-color=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $color_match ) ) {
-					$raw_color  = html_entity_decode( $color_match[1] ?: $color_match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+					$raw_color  = html_entity_decode( self::matched_attribute_value( $color_match ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 					$text_color = self::sanitize_highlight_color( $raw_color );
 				}
 
@@ -474,7 +515,67 @@ final class Uplink_Editorial_Title {
 			);
 		}
 
+		// Keep a private marker for RichText while storing user classes as data.
+		if ( in_array( 'span', $enabled_formats, true ) ) {
+			$sanitized = preg_replace_callback(
+				'/<span\b([^>]*)>/i',
+				static function ( array $matches ): string {
+					$attributes   = $matches[1] ?? '';
+					$classes      = '';
+					$letter_group = '';
+					$letter_index = '';
+					$letter_label = '';
+
+					if ( preg_match( '/data-uet-inline-class=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $class_match ) ) {
+						$classes = html_entity_decode( self::matched_attribute_value( $class_match ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+					} elseif ( preg_match( '/class=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $class_match ) ) {
+						$classes = html_entity_decode( self::matched_attribute_value( $class_match ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+					}
+
+					if ( preg_match( '/data-uet-letter-group=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $group_match ) ) {
+						$letter_group = self::sanitize_letter_group_id(
+							html_entity_decode( self::matched_attribute_value( $group_match ), ENT_QUOTES | ENT_HTML5, 'UTF-8' )
+						);
+					}
+					if ( preg_match( '/data-uet-letter-index=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $index_match ) ) {
+						$raw_index = self::matched_attribute_value( $index_match );
+						if ( preg_match( '/^\d{1,4}$/', $raw_index ) ) {
+							$letter_index = (string) absint( $raw_index );
+						}
+					}
+					if ( preg_match( '/data-uet-letter-label=(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $label_match ) ) {
+						$letter_label = self::sanitize_letter_label(
+							html_entity_decode( self::matched_attribute_value( $label_match ), ENT_QUOTES | ENT_HTML5, 'UTF-8' )
+						);
+					}
+
+					if ( '' !== $letter_group && '' !== $letter_index ) {
+						return '<span class="uet-letter" data-uet-letter-group="' . esc_attr( $letter_group ) .
+							'" data-uet-letter-index="' . esc_attr( $letter_index ) . '">';
+					}
+
+					$classes = self::sanitize_inline_classes( $classes );
+					return '<span class="uet-inline-class"' .
+						( $classes ? ' data-uet-inline-class="' . esc_attr( $classes ) . '"' : '' ) .
+						( $letter_group && $letter_label ? ' data-uet-letter-group="' . esc_attr( $letter_group ) . '"' : '' ) .
+						( $letter_group && $letter_label ? ' data-uet-letter-label="' . esc_attr( $letter_label ) . '"' : '' ) . '>';
+				},
+				$sanitized
+			);
+		}
+
 		return trim( is_string( $sanitized ) ? $sanitized : '' );
+	}
+
+	/**
+	 * Return the value captured from a double- or single-quoted attribute.
+	 */
+	private static function matched_attribute_value( array $matches ): string {
+		if ( isset( $matches[1] ) && '' !== $matches[1] ) {
+			return $matches[1];
+		}
+
+		return isset( $matches[2] ) ? $matches[2] : '';
 	}
 
 	/**
@@ -590,7 +691,73 @@ final class Uplink_Editorial_Title {
 			$value
 		);
 
+		$rendered = preg_replace_callback(
+			'/<span\b([^>]*)>/i',
+			static function ( array $matches ): string {
+				$attributes   = $matches[1] ?? '';
+				$classes      = '';
+				$letter_group = '';
+				$letter_label = '';
+
+				if ( preg_match( '/data-uet-letter-index="\d{1,4}"/i', $attributes ) ) {
+					return '<span aria-hidden="true">';
+				}
+
+				if ( preg_match( '/data-uet-inline-class="([^"]*)"/i', $attributes, $class_match ) ) {
+					$classes = html_entity_decode( $class_match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+				}
+				if ( preg_match( '/data-uet-letter-group="([^"]*)"/i', $attributes, $group_match ) ) {
+					$letter_group = self::sanitize_letter_group_id( html_entity_decode( $group_match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
+				}
+				if ( preg_match( '/data-uet-letter-label="([^"]*)"/i', $attributes, $label_match ) ) {
+					$letter_label = self::sanitize_letter_label( html_entity_decode( $label_match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
+				}
+
+				$classes = self::sanitize_inline_classes( $classes );
+				return '<span' .
+					( $classes ? ' class="' . esc_attr( $classes ) . '"' : '' ) .
+					( $letter_group && $letter_label ? ' aria-label="' . esc_attr( $letter_label ) . '"' : '' ) . '>';
+			},
+			is_string( $rendered ) ? $rendered : ''
+		);
+
 		return is_string( $rendered ) ? $rendered : '';
+	}
+
+	/**
+	 * Sanitize inline span classes and remove the editor-only marker.
+	 */
+	public static function sanitize_inline_classes( $value ): string {
+		$classes = self::sanitize_classes( $value );
+		if ( '' === $classes ) {
+			return '';
+		}
+
+		$classes = array_diff( preg_split( '/\s+/', $classes ) ?: array(), array( 'uet-inline-class', 'uet-letter' ) );
+		return implode( ' ', $classes );
+	}
+
+	/**
+	 * Sanitize the private ID that associates generated letter spans with a parent.
+	 */
+	public static function sanitize_letter_group_id( $value ): string {
+		if ( ! is_string( $value ) ) {
+			return '';
+		}
+
+		return substr( preg_replace( '/[^a-z0-9_-]/i', '', trim( $value ) ) ?: '', 0, 64 );
+	}
+
+	/**
+	 * Sanitize the accessible label stored on a generated letter group.
+	 */
+	public static function sanitize_letter_label( $value ): string {
+		if ( ! is_string( $value ) ) {
+			return '';
+		}
+
+		$value = sanitize_text_field( $value );
+		return function_exists( 'mb_substr' ) ? mb_substr( $value, 0, 500 ) : substr( $value, 0, 500 );
 	}
 
 	/**

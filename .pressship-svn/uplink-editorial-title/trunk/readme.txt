@@ -4,7 +4,7 @@ Tags: editorial, title, gutenberg, block editor, dynamic data
 Requires at least: 7.0
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 1.0.1
+Stable tag: 1.1.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -19,9 +19,12 @@ Allowed inline markup is deliberately restricted to:
 * strong
 * emphasis
 * highlight (mark), with optional custom color
+* inline span with sanitized CSS classes
 * strikethrough
 * subscript
 * superscript
+
+Inline spans may be nested or left without classes. The Split letters action wraps a selection in a classed parent span and wraps each visible Unicode grapheme in a child span for staggered CSS animation. Spaces remain text nodes. Generated letter groups can be unwrapped without removing other formatting.
 
 Underline is intentionally not included and is not planned for a future release. Underlined text is widely understood to be a hyperlink, so using it as decoration can make a title misleading. A site that deliberately wants this treatment can assign a custom CSS class to the editorial title and apply `text-decoration` in its theme CSS. The same approach can restyle an existing inline format such as strong, emphasis, or highlight.
 
@@ -104,6 +107,18 @@ The plugin adds these tags to the Post dynamic-data group:
 Editorial title markup is sanitized against the administrator-selected strict HTML allowlist. Highlight text and background colors are stored as validated data and rendered only as `color` and `background-color` values. CSS class values are sanitized individually. Settings require administrator access, and meta writes require permission to edit the target post.
 
 == Changelog ==
+
+= 1.1.2 =
+* Prevents warnings when an editorial title contains an empty quoted inline-format attribute.
+
+= 1.1.1 =
+* Allows plain spans without classes and nested spans in editorial titles.
+* Adds reversible Unicode-aware letter splitting for staggered CSS animation.
+
+= 1.1.0 =
+* Adds an inline span format with sanitized, space-separated CSS classes.
+* Moves Clear beside Apply changes and adds a live WCAG contrast check for the draft colors.
+* Keeps color edits in a draft until Apply changes is selected; closing the picker discards them.
 
 = 1.0.1 =
 * Corrected the plugin author metadata to identify Stephen Walker and link to the `stphnwlkr` WordPress.org profile.
